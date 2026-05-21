@@ -1,9 +1,11 @@
 <div align="center">
 
-# ◇ openall
-<sub>openall is a manifesto in action. The translation layer is gone.</sub>
+  <img src="openall-icon (1).jpg" alt="openall screenshot" width="100" />
 
+<H1>openall</H1>
+<H3>A framework that reimagines software for the age of intent</H3>
 </div>
+
 
 ---
 
