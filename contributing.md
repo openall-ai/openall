@@ -1,25 +1,25 @@
 # Contributing to openall
 
-Thank you for your interest in contributing. openall is an early-stage open-source project exploring a genuinely new paradigm for software. Contributions at every level are welcome: code, documentation, bug reports, ideas, and questions.
+Thank you for your interest in contributing. openall is an early-stage open-source project exploring a genuinely new paradigm for software. Contributions at every level are welcome: code, documentation, bug reports, and ideas.
 
 ---
 
 ## Before you start
 
-Read [How It Works](how-it-works.md) and [Architecture](architecture.md) before writing any code. Understanding the intent-first model is essential for writing contributions that fit the project's direction.
+Read [How It Works](how-it-works.md) and [Architecture](architecture.md) before writing any code. Understanding the intent-first model and the NestJS/React/Electron stack is essential for contributions that fit the project's direction.
 
 ---
 
 ## Ways to contribute
 
 **Bug reports**
-If something doesn't work, open an issue. Include your Node.js version, your LLM provider, the intent you submitted, and the error or unexpected behavior you observed. Execution traces are especially helpful.
+Open an issue. Include your platform (web mode or Electron app), your Node.js version, your OpenRouter model, the message you sent, and the error or unexpected behavior. SQL queries logged in the message panel are especially useful.
 
 **Feature requests and ideas**
 Open an issue with the label `idea`. Describe the use case, not just the feature. What intent would a user express? What should happen?
 
 **Documentation**
-Documentation improvements are always welcome. If something in the docs is unclear, incomplete, or wrong, open a PR.
+Documentation improvements are always welcome. If something is unclear, incomplete, or wrong, open a PR.
 
 **Code contributions**
 See the process below.
@@ -32,21 +32,56 @@ See the process below.
 git clone https://github.com/openall-ai/openall.git
 cd openall
 npm install
-cp .env.example .env
-# Add your ANTHROPIC_API_KEY to .env
 ```
 
-To run the core runtime in development mode:
+### Running in web mode (recommended for development)
+
+Terminal 1 — NestJS backend with file watching:
 
 ```bash
-cd core && npm run dev
+cd core
+npm run start:dev
 ```
+
+Terminal 2 — React frontend with HMR:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173). The Vite dev server proxies `/api` and `/api/chat` to the NestJS backend automatically.
+
+### Running in Electron (app mode)
+
+First build the frontend and core:
+
+```bash
+cd frontend && npm run build
+cd ../core && npm run build
+```
+
+Then launch the Electron app:
+
+```bash
+cd app && npm start
+```
+
+---
+
+## Project structure to know
+
+- **`core/src/chat/chat.service.ts`** — the most important file. LLM call loop, tool execution, state management. Most backend contributions touch this.
+- **`core/src/chat/chat.gateway.ts`** — WebSocket event routing. Add new event types here when extending the protocol.
+- **`frontend/src/chat-box.tsx`** — `CounterStore` is the central MobX store. Most frontend state flows through here.
+- **`frontend/src/connectivity/connection.ts`** — the transport abstraction. Any new message types need a corresponding method here (with both WebSocket and IPC branches).
+- **`app/electron/main.js`** — when adding new IPC handlers for new gateway methods, register them here.
 
 ---
 
 ## Pull request process
 
-1. **Open an issue first** for any non-trivial change. This avoids wasted effort if the direction isn't right for the project.
+1. **Open an issue first** for any non-trivial change. This avoids wasted effort if the direction is not right.
 
 2. **Fork the repo** and create a branch from `main`:
 
@@ -54,28 +89,35 @@ cd core && npm run dev
    git checkout -b your-feature-name
    ```
 
-3. **Write your code.** Follow the code style guidelines below.
+3. **Write your code.** See code style guidelines below.
 
-4. **Test your changes.** The project is early-stage and the test suite is growing. At minimum, manually verify your change works end-to-end with a real LLM call.
+4. **Test your change end-to-end.** The test suite is nascent. At minimum, test manually in both web mode and Electron app mode if your change touches the transport layer or the NestJS/Electron boundary.
 
-5. **Update documentation** if your change affects behavior, configuration, or architecture.
+5. **Update documentation** if your change affects behavior, the WebSocket protocol, or the architecture.
 
-6. **Open a pull request** against `main`. Include:
-   - A clear description of what changed and why
-   - A link to the related issue
-   - An example of the intent that exercises your change, if applicable
+6. **Open a pull request** against `main`. Include a clear description, a link to the related issue, and an example message that exercises your change.
 
 ---
 
 ## Code style
 
-The project is written in TypeScript. A few guidelines:
+The project is TypeScript throughout. A few guidelines:
 
-- **Prefer explicit types** over inferred types in function signatures and public interfaces
-- **Keep modules small and focused.** Each file should have a single, clear responsibility
-- **No magic strings.** Use constants or enums for values that appear more than once
-- **Write intent-forward code.** If someone reads your code and cannot understand what it is trying to do in 30 seconds, refactor it
-- Formatting is handled by Prettier. Run `npm run format` before committing
+**NestJS / core:**
+- Follow NestJS module conventions — services, gateways, and entities in their own files, grouped by feature module
+- New capabilities exposed to the LLM go in `chat.service.ts` as tool definitions (alongside `openHtmlViewTool` and `queryDatabase`)
+- New persistent state goes in a TypeORM entity inside the relevant module's `entities/` folder
+- Format with Prettier: `npm run format` inside `core/`
+
+**React / frontend:**
+- New observable state goes in an appropriate MobX store (global app state in `CounterStore`, UI focus state in `ActiveWindowStore`, isolated feature state in its own store)
+- Components that read from MobX stores must be wrapped with `observer()` from `mobx-react-lite`
+- New message types sent to the backend must be handled in both branches of `Connection` (WebSocket path and IPC path)
+- Styling uses Tailwind CSS v4 utility classes only — no custom CSS files
+
+**General:**
+- Prefer explicit TypeScript types in function signatures and public interfaces
+- No magic strings — use constants for event names and entity column names that appear more than once
 
 ---
 
@@ -86,37 +128,40 @@ Use the conventional commits format:
 ```
 type(scope): short description
 
-Longer explanation if needed. What changed, why it changed.
+Longer explanation if needed. What changed, why.
 ```
 
 Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
 
+Scopes: `core`, `frontend`, `app`, `docs`
+
 Examples:
 ```
-feat(core): add streaming support for LLM responses
-fix(app): resolve state desync on concurrent intents
-docs: expand architecture section on observability
+feat(core): add support for file attachment tool
+fix(frontend): restore minimized windows on reconnect
+docs: add web mode vs app mode section to architecture
+chore(app): update Electron to 43.x
 ```
 
 ---
 
 ## What we are not looking for
 
-- Contributions that add application code to the `core` runtime (the whole point is that application code is not needed)
-- Wrapping existing app frameworks and calling them openall
-- Prompt engineering tricks presented as architecture
-- Dependencies that compromise the runtime's provider-agnostic design
+- Contributions that add traditional application code to replace the LLM's role in the runtime
+- Wrapping existing app frameworks under the openall namespace
+- Hardcoded schemas in `apps.sqlite` — that database belongs to the LLM
+- Dependencies that couple the core to a specific LLM provider (the OpenRouter integration should remain the abstraction boundary)
 
 When in doubt, open an issue and ask before building.
-
----
-
-## Code of conduct
-
-Be direct. Be respectful. Engage with ideas, not personalities. This is a project about rethinking something fundamental — it will attract strong opinions. Strong opinions are welcome. Hostility is not.
 
 ---
 
 ## License
 
 By contributing to openall, you agree that your contributions will be licensed under the same [PolyForm Noncommercial License](../LICENSE) that covers the project.
+
+---
+
+## Code of conduct
+
+Be direct. Be respectful. Engage with ideas, not personalities. This is a project about rethinking something fundamental — strong opinions are welcome. Hostility is not.
