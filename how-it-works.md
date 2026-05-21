@@ -4,86 +4,82 @@
 
 Every piece of software ever written is a translation layer.
 
-A human has intent - a goal, a workflow, a business rule. To act on that intent, a developer must translate it into code. The code is then compiled or interpreted into machine instructions. The machine finally acts.
+A human has intent — a goal, a workflow, a business rule. To act on that intent, a developer or an LLM must translate it into code. The code is then compiled or interpreted into machine instructions. The machine finally acts.
 
 This pipeline has served us well for decades. But it is lossy at every step:
 
 - Intent is ambiguous, requirements documents are incomplete
 - Code is rigid, changing intent means rewriting code
-- Only developers used to participate in this process
-- Vibe coding introduced coding to common people
 - The gap between what was intended and what was built is a permanent source of bugs, delays, and cost
 
 Modern language models change the equation. They are capable of understanding intent expressed in natural language, reasoning about what needs to happen, and producing structured outputs — all at runtime, without pre-written application code.
 
-openall builds on this capability and takes it to its logical conclusion.
+openall builds on this capability and takes it to its logical conclusion: the LLM is not a tool the application uses. **The LLM is the application.**
 
 ---
 
-## The openall model
+## The LLM as operating system
 
-In openall, the architecture is inverted:
+openall gives the LLM two tools and a database, then gets out of the way:
 
-| Traditional software | openall |
-|---|---|
-| Intent → Code → Runtime → Action | Intent → Runtime → Action |
-| Logic lives in code files | Logic lives in natural language |
-| Developers write business rules | Domain experts express business rules |
-| Rigid at deploy time | Adaptive at runtime |
-| Requires a code change to update behavior | Requires an intent change to update behavior |
+**`query_db`** — executes any SQLite query against a live application database. The LLM uses this to create tables, insert data, update records, and read state. There is no predefined schema. The LLM invents and evolves the schema as needed to fulfill the user's intent.
 
-The LLM is not a tool the application uses. **The LLM is the application.**
+**`attach_artifact`** — renders a HTML view inside a draggable floating window in the UI. The LLM uses this to display data, forms, lists, dashboards, and any other interface needed. The HTML is Tailwind-styled and can call `doAction()` on user interactions, which routes clicks and form inputs back to the LLM for further reasoning.
+
+The LLM's system prompt frames this explicitly: it is role-playing as an operating system. The user's natural language messages are the program.
 
 ---
 
-## The execution model
+## A complete request cycle
 
-When a user or system submits intent to openall, the following happens:
+Here is what happens when a user types a message:
 
-**1. Intent ingestion**
-The input arrives as natural language. It may be a user action, a scheduled trigger, an external event, or a system-generated prompt.
+**1. Message arrives**
+The user types intent in natural language. The frontend sends it to the NestJS backend over WebSocket (web mode) or Electron IPC (app mode).
 
-**2. Context assembly**
-The runtime assembles the relevant context: current state, available tools and capabilities, any domain definitions or constraints the operator has configured.
+**2. Chat history is assembled**
+The backend loads the last 30 messages from SQLite and reconstructs the conversation. The LLM always has full context of the current session.
 
-**3. LLM reasoning**
-The language model receives the intent and context. It reasons about what needs to happen, in what order, and with what parameters. This is not a fixed decision tree — it is live reasoning over the specific situation.
+**3. LLM reasoning loop**
+The backend calls the OpenRouter API with:
+- The system prompt (LLM-as-OS role)
+- The currently open windows (their IDs and titles, so the LLM can update existing windows instead of always creating new ones)
+- The full conversation history
+- The two tool definitions
 
-**4. Structured execution**
-The LLM create a structured output and executes it.
+The LLM reasons over the intent and decides what to do.
 
+**4. Tool execution**
+If the LLM calls `query_db`, the backend executes the SQL against the apps database and returns the result. If the LLM calls `attach_artifact`, the backend saves the HTML content to the window state database and pushes a `ui` event to the frontend. The loop runs up to 10 times to handle multi-step reasoning (for example: create a table, then query it, then render the results).
 
----
+**5. UI update**
+The frontend receives `ui` events and renders the HTML content inside a new or updated draggable window. The window is interactive immediately.
 
-## What replaces application code
-
-In a traditional application, developers or LLMs write code:
-
-- **Routing logic** — which handler runs for which input
-- **Business rules** — what should happen and under what conditions
-- **State transitions** — how the system moves from one state to another
-- **Validation** — whether an input or action is acceptable
-- **Error handling** — what to do when something goes wrong
-
-In openall, all of these responsibilities shift to the LLM:
-
-- **Routing** is handled by the LLM interpreting the intent
-- **Business rules** are expressed in natural language by domain experts and embedded in the LLM context
-- **State** is managed by the LLM
-- **Validation** is a reasoning step, not a hardcoded check
-- **Error handling** is part of the LLM's reasoning about what to do when things go wrong
+**6. User interaction**
+When the user interacts with a rendered window (clicking a button, submitting a form), the frontend calls `doAction()`. This sends the active window ID, current form input values, and the action arguments back to the backend. The LLM reasons over the action and updates the window accordingly.
 
 ---
 
-## What you do provide
+## State management
 
-openall does not mean there is nothing to configure. Operators provide:
+openall maintains two SQLite databases:
 
-- **Domain definitions** — the entities, relationships, and rules that define your domain, expressed in natural language
-- **Capability declarations** — the tools, APIs, and integrations available to the LLM
-- **Constraints** — what the LLM is and is not allowed to do
+**`chat.sqlite`** — owned by the framework. Stores chat message history, open window state (HTML content, title, position), and LLM provider configuration. This persists across sessions and is restored automatically on reconnect.
 
-This is the authoring surface of openall. It is not code. It is intent, structured enough for the runtime to reason over.
+**`apps.sqlite`** — owned by the LLM. This is a blank database that the LLM creates and manages entirely through `query_db`. It has no predefined schema. The LLM creates tables as needed and populates them with real data before rendering any UI. If data is not in the database, the LLM is instructed to add it first, so the UI always reflects persisted state rather than in-memory fabrication.
+
+In Electron app mode, both databases are stored at `~/.openall/data/`. In web mode, they are stored at `./data/` relative to where the core server is running.
+
+---
+
+## The transport layer abstraction
+
+The frontend's `Connection` class detects its environment at startup:
+
+- If `window.api` is defined (Electron), it uses Electron IPC (`ipcRenderer.invoke`) to communicate with the NestJS core running in the main process.
+- If `window.api` is not defined (browser/web mode), it opens a WebSocket connection to `/api/chat` on the NestJS server.
+
+The rest of the frontend is identical in both modes. This means the same React/MobX codebase works as both a desktop app and a web app with no conditional rendering or environment-specific logic above the connection layer.
 
 ---
 
@@ -91,17 +87,17 @@ This is the authoring surface of openall. It is not code. It is intent, structur
 
 openall is an experiment at the frontier. There are genuine tradeoffs:
 
-**Determinism:** LLM reasoning is probabilistic. openall takes this seriously and is designed with observability and auditability as first-class concerns, not as afterthoughts.
+**Determinism:** LLM reasoning is probabilistic. The same intent may produce different results on different runs. This is a real characteristic of the system, not a bug to be hidden. Observability (the message log, the SQL queries logged in real time) is a first-class feature.
 
-**Latency:** LLM inference is slower than compiled code execution. This is a real constraint and one the project is actively working on through caching and pre-reasoning.
+**Schema stability:** Because the LLM owns the apps database schema, schema changes can happen implicitly as intent evolves. This is a feature (flexibility) and a risk (data integrity). It is an open area of development.
 
-**Cost:** LLM API calls have a cost per token. The architecture is designed to minimize unnecessary inference while maximizing the expressiveness of intent.
+**Latency:** Multi-step tool use (create table, query, render) can require several round-trips to the LLM. The current loop cap is 10 iterations per message.
 
-**Trust boundaries:** Not all business logic should be delegated to a probabilistic model. openall is not the right architecture for safety-critical systems where deterministic behavior is a hard requirement. It is the right architecture for adaptive, human-centered systems where flexibility and expressiveness matter most.
+**Cost:** LLM API calls are metered per token. Sessions with complex multi-tool flows consume more tokens. The choice of model via OpenRouter lets operators balance cost and capability.
 
 ---
 
 ## Further reading
 
-- [Architecture](architecture.md) — How the codebase is structured
-- [Getting Started](getting-started.md) — Run your first intent-driven application
+- [Architecture](architecture.md) — How the NestJS, React, and Electron layers are structured
+- [Getting Started](getting-started.md) — Run your first session
