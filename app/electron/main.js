@@ -61,6 +61,11 @@ async function init() {
         return await chatGateway.handleMessage(msgType, data, client);
     });
 
+    ipcMain.handle('chat-service:unload', async (_event) => {
+        console.log('unload');
+        return await chatGateway.handleDisconnect(client);
+    });
+
     app.whenReady().then(() => {
         createWindow();
         // electronUpdater.default.autoUpdater.checkForUpdatesAndNotify();

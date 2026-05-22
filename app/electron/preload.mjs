@@ -17,3 +17,8 @@ contextBridge.exposeInMainWorld("api", {
         });
     },
 });
+
+
+window.addEventListener('beforeunload', () => {
+    ipcRenderer.invoke('chat-service:unload');
+});
