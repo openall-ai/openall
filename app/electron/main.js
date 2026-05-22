@@ -62,7 +62,6 @@ async function init() {
     });
 
     ipcMain.handle('chat-service:unload', async (_event) => {
-        console.log('unload');
         return await chatGateway.handleDisconnect(client);
     });
 
