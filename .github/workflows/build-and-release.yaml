@@ -69,16 +69,17 @@ jobs:
 
       - name: Zip app dist
         run: |
-          cd app && 
           if [ "${{ matrix.platform }}" == "mac" ]; then
-            zip -r electron-mac.app.zip dist/mac-arm64/openall.app
+            cd app/dist/mac-arm64 && 
+            zip -r ../../openall-mac.app.zip openall.app/
           elif [ "${{ matrix.platform }}" == "mac64" ]; then
-            zip -r electron-mac64.app.zip dist/mac/openall.app
+            cd app/dist/mac && 
+            zip -r ../../openall-mac64.app.zip openall.app/
           fi
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
           name: build-output
-          path: ${{ matrix.platform == 'mac' && 'app/electron-mac.app.zip' || matrix.platform == 'mac64' && 'app/electron-mac64.app.zip' || 'app/dist/openall 0.2.0.exe' }}
+          path: ${{ matrix.platform == 'mac' && 'app/openall-mac.app.zip' || matrix.platform == 'mac64' && 'app/openall-mac64.app.zip' || 'app/dist/openall 0.2.0.exe' }}
           archive: false
