@@ -72,6 +72,7 @@ async function init() {
         clipboard.writeImage(img);
     });
 
+
     ipcMain.handle('file:pick', async (_event) => {
         const result = await dialog.showOpenDialog(mainWindow, { properties: ['openFile'] });
         if (result.canceled || !result.filePaths.length) return null;
