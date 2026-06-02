@@ -5,5 +5,6 @@ import { McpService } from './mcp.service';
     imports: [
     ],
     providers: [McpService],
+    exports: [McpService],
 })
 export class McpModule { }
