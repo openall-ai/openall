@@ -129,7 +129,7 @@ const DraggableWindow = observer(({ children, windowKey, title, data, minimized,
                     < div onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
                         className="flex items-center justify-between px-4 py-3 bg-white/40 cursor-move select-none"
                         style={{
-                            'backgroundColor': isWindowCurrentlyActive ? 'color-mix(in oklab,  #fff 40%, transparent)' : 'transparent',
+                            'backgroundColor': isWindowCurrentlyActive ? 'rgba(255,255,255,0.4)' : 'transparent',
                         }}>
                         {/* <div className="flex gap-2" >
                             <div className="w-3 h-3 rounded-full bg-red-500"> </div>

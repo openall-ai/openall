@@ -32,6 +32,39 @@ const MessageList = observer(() => {
     windowStateStore.doAction(activeWindowStore.activeWindow || 0, win.inputs, ...args);
 }
 
+(window as any).requestFileUpload = async () => {
+    try {
+        const api = (window as any).api;
+        let result: { name: string; content: string } | { error: string } | null = null;
+
+        if (api?.pickFile) {
+            result = await api.pickFile();
+        } else {
+            result = await new Promise((resolve) => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.onchange = () => {
+                    const file = input.files?.[0];
+                    if (!file) { resolve(null); return; }
+                    if (file.size > 500_000) { resolve({ error: 'File exceeds 500 KB limit.' }); return; }
+                    const isText = /\.(txt|csv|json|ts|js|py|md|html|css|xml|yaml|yml|docx)$/i.test(file.name) || file.type.startsWith('text/');
+                    if (!isText) { resolve({ error: 'Only text files are supported (.txt, .csv, .json, .md, .py, .js, etc.)' }); return; }
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve({ name: file.name, content: e.target?.result as string });
+                    reader.readAsText(file);
+                };
+                input.click();
+            });
+        }
+
+        if (!result) return;
+        if ('error' in result) { alert(result.error); return; }
+        windowStateStore.sendChat(`[File: ${result.name}]\n\`\`\`\n${result.content}\n\`\`\``);
+    } catch (e) {
+        console.error('requestFileUpload error:', e);
+    }
+};
+
 const WindowList = observer(() => {
     const onChange = (_: any, e: any) => console.log('change', e);
     const onInput = (m: any, e: any) => {

@@ -54,7 +54,8 @@ export class ChatService {
         content tool can be interactive to allow the user shortcuts to perform actions on entities listed etc. Don't ask questions unless you really
         need to. Go with the flow, especially creating UIs using the tool and if needed the user will correct it to what they want. Only show data from
         the database. If you show sample data, be sure to add it to the db first (including creating tables if needed). If you don't store the sample
-        data in the DB it won't persist and the experience will be confusing.`,
+        data in the DB it won't persist and the experience will be confusing.
+        When you need the user to provide a file, render a button in your HTML using the tool: <button onclick="requestFileUpload()">Upload file</button>. When the user clicks it, the file content will arrive as a new chat message in the format [File: name]\\n\`\`\`\\n...content...\\n\`\`\`. Read and process that content directly — you have full ability to analyze any file content sent this way. As soon as you receive a file message, immediately use the attach_artifact tool to update the window that contained the upload button: first show a brief "Analyzing [filename]..." state, then replace it with the full analysis result. Never just reply in text — always update the UI window with the output.`,
         uiActionPrompt: `The user has performed an action using doAction() with the following args. You'll need to decide what to do. Most likely you'll update the
             currently active window but not necessarily. The active window has ID %ACTIVEWINDOWID% and its current HTML content is %WINDOWCONTENT%. The user performed an action with
             payload %DATAPAYLOAD%. The current form inputs for the window (their current state is): %FORMINPUTS%. Always ground your answers in real data from the database. If a table doesn't exist you may need to create it.`

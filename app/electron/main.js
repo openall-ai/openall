@@ -1,4 +1,6 @@
-import { app, BrowserWindow, Menu, ipcMain, shell, clipboard, nativeImage } from "electron";
+import { app, BrowserWindow, Menu, ipcMain, shell, clipboard, nativeImage, dialog } from "electron";
+import { readFileSync } from "fs";
+import { spawnSync } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
 import * as electronUpdater from 'electron-updater';
@@ -68,6 +70,31 @@ async function init() {
     ipcMain.handle('clipboard:writeImage', (_event, dataUrl) => {
         const img = nativeImage.createFromDataURL(dataUrl);
         clipboard.writeImage(img);
+    });
+
+
+    ipcMain.handle('file:pick', async (_event) => {
+        const result = await dialog.showOpenDialog(mainWindow, { properties: ['openFile'] });
+        if (result.canceled || !result.filePaths.length) return null;
+        const filePath = result.filePaths[0];
+        const name = filePath.split(/[\\/]/).pop();
+        const ext = name.split('.').pop()?.toLowerCase();
+
+        if (ext === 'docx') {
+            const unzip = spawnSync('unzip', ['-p', filePath, 'word/document.xml']);
+            if (unzip.status !== 0) return { error: 'Failed to read .docx file.' };
+            const xml = unzip.stdout.toString('utf-8');
+            const text = xml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+            if (!text) return { error: 'Could not extract text from this .docx file.' };
+            if (text.length > 500_000) return { error: 'File content exceeds 500 KB limit.' };
+            return { name, content: text };
+        }
+
+        const buffer = readFileSync(filePath);
+        if (buffer.length > 500_000) return { error: 'File exceeds 500 KB limit.' };
+        const text = buffer.toString('utf-8');
+        if (text.includes('\0')) return { error: 'Binary files (images, PDFs, etc.) are not supported. Please upload a text file (.txt, .csv, .json, .md, .py, .js, etc.) or a Word document (.docx).' };
+        return { name, content: text };
     });
 
     app.whenReady().then(() => {

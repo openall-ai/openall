@@ -32,7 +32,7 @@ const PLATFORMS = [
         name: "Threads",
         icon: (
             <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                <path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.022-5.11.936-6.54 2.717C4.307 6.504 3.616 8.914 3.589 12c.027 3.086.718 5.496 2.057 7.164 1.43 1.783 3.631 2.698 6.54 2.717 2.623-.02 4.358-.631 5.8-2.045 1.647-1.613 1.618-3.593 1.09-4.798-.31-.71-.873-1.3-1.634-1.751-.192 1.352-.622 2.446-1.284 3.272-.886 1.102-2.14 1.704-3.73 1.79-1.202.065-2.361-.218-3.259-.801-1.063-.689-1.685-1.74-1.752-2.964-.065-1.19.408-2.285 1.33-3.082.88-.76 2.119-1.207 3.583-1.291a13.853 13.853 0 0 1 3.02.142c-.126-.742-.375-1.332-.75-1.757-.513-.586-1.308-.883-2.359-.89h-.029c-.844 0-1.992.232-2.721 1.32L7.734 7.847c.98-1.454 2.568-2.256 4.481-2.256h.044c3.orienta 1.17 4.8 3.751 4.8 7.558 0 .154-.006.306-.02.456 1.15.687 2.027 1.607 2.559 2.819.877 2.012.851 5.231-1.693 7.684-1.802 1.761-4.017 2.636-6.719 2.892zm-1.55-7.283c.799-.043 1.437-.279 1.895-.701.435-.401.674-1.042.713-1.909a11.734 11.734 0 0 0-2.545-.105c-.816.049-1.449.248-1.825.561-.336.28-.494.638-.47 1.065.047.87.794 1.112 2.232 1.089z" />
+                <path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.022-5.11.936-6.54 2.717C4.307 6.504 3.616 8.914 3.589 12c.027 3.086.718 5.496 2.057 7.164 1.43 1.783 3.631 2.698 6.54 2.717 2.623-.02 4.358-.631 5.8-2.045 1.647-1.613 1.618-3.593 1.09-4.798-.31-.71-.873-1.3-1.634-1.751-.192 1.352-.622 2.446-1.284 3.272-.886 1.102-2.14 1.704-3.73 1.79-1.202.065-2.361-.218-3.259-.801-1.063-.689-1.685-1.74-1.752-2.964-.065-1.19.408-2.285 1.33-3.082.88-.76 2.119-1.207 3.583-1.291a13.853 13.853 0 0 1 3.02.142c-.126-.742-.375-1.332-.75-1.757-.513-.586-1.308-.883-2.359-.89h-.029c-.844 0-1.992.232-2.721 1.32L7.734 7.847c.98-1.454 2.568-2.256 4.481-2.256h.044c3.601 0 4.8 3.751 4.8 7.558 0 .154-.006.306-.02.456 1.15.687 2.027 1.607 2.559 2.819.877 2.012.851 5.231-1.693 7.684-1.802 1.761-4.017 2.636-6.719 2.892zm-1.55-7.283c.799-.043 1.437-.279 1.895-.701.435-.401.674-1.042.713-1.909a11.734 11.734 0 0 0-2.545-.105c-.816.049-1.449.248-1.825.561-.336.28-.494.638-.47 1.065.047.87.794 1.112 2.232 1.089z" />
             </svg>
         ),
         action: (caption: string) => {
@@ -49,7 +49,13 @@ const PLATFORMS = [
         ),
         action: (caption: string) => {
             const text = encodeURIComponent(`${caption}\nhttps://useopenall.com`);
-            openUrl(`https://wa.me/?text=${text}`);
+            const api = (window as any).api;
+            // In Electron, use whatsapp:// scheme to open the desktop app
+            if (api?.openExternal) {
+                openUrl(`whatsapp://send?text=${text}`);
+            } else {
+                openUrl(`https://wa.me/?text=${text}`);
+            }
         },
     },
     {
@@ -178,27 +184,25 @@ export const ShareModal = observer(() => {
     const handlePlatformClick = async (platform: typeof PLATFORMS[number]) => {
         setClipboardError(null);
         const isDownload = (platform as any).isDownload;
-        if (!isDownload) {
-            try {
-                await copyImageToClipboard(state.imageDataUrl);
-                setCopiedMessage("Image copied to clipboard — paste it into your post!");
-                setCopied(true);
-                setTimeout(() => setCopied(false), 4000);
-            } catch (err: any) {
-                console.error("Clipboard write failed:", err);
-                setClipboardError(err?.message ?? "Clipboard write failed — try right-clicking the preview image to copy it manually.");
-            }
-        } else {
+
+        if (isDownload) {
             setCopiedMessage("Image downloaded — attach it to your post using the image upload button.");
             setCopied(true);
             setTimeout(() => setCopied(false), 6000);
+            platform.action(caption, state.imageDataUrl);
+            return;
         }
 
-        if (isDownload) {
-            platform.action(caption, state.imageDataUrl);
-        } else {
-            (platform.action as (c: string) => void)(caption);
+        try {
+            await copyImageToClipboard(state.imageDataUrl);
+            setCopiedMessage("Image copied to clipboard — paste it with ⌘V (Mac) or Ctrl+V");
+            setCopied(true);
+            setTimeout(() => setCopied(false), 5000);
+        } catch (err: any) {
+            console.error("Clipboard write failed:", err);
+            setClipboardError(err?.message ?? "Clipboard write failed — try right-clicking the preview image to copy it manually.");
         }
+        (platform.action as (c: string) => void)(caption);
     };
 
     const handleClose = () => {
@@ -211,11 +215,11 @@ export const ShareModal = observer(() => {
         <div
             className="fixed inset-0 z-50 flex items-center justify-center"
             style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-            onPointerDown={handleClose}
+            onClick={handleClose}
         >
             <div
                 className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4 flex flex-col gap-4"
-                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
                 <div className="flex items-center justify-between">
@@ -223,7 +227,7 @@ export const ShareModal = observer(() => {
                         Share — {state.windowTitle}
                     </h2>
                     <button
-                        onPointerDown={handleClose}
+                        onClick={handleClose}
                         className="w-7 h-7 rounded-lg hover:bg-zinc-200/80 flex items-center justify-center text-zinc-500 transition flex-shrink-0"
                     >
                         &times;
@@ -263,7 +267,7 @@ export const ShareModal = observer(() => {
                     {PLATFORMS.map((platform) => (
                         <button
                             key={platform.name}
-                            onPointerDown={() => handlePlatformClick(platform)}
+                            onClick={() => handlePlatformClick(platform)}
                             className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-zinc-100 transition text-zinc-600 hover:text-zinc-900"
                         >
                             {platform.icon}
