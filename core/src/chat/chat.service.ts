@@ -5,7 +5,6 @@ import { ChatMessageEntity } from "./entities/chat-message.entity";
 import { ChatConfigEntity } from "./entities/chat-config.entity";
 import { Repository } from "typeorm";
 import { DatabaseService } from "../state/database.service";
-import * as keytar from 'keytar';
 import { openHtmlViewTool, queryDatabase } from "./tools";
 import { AnthropicService } from "./anthropic.service";
 import { McpService } from "../mcp/mcp.service";
@@ -30,6 +29,11 @@ const PROVIDER_CONFIGS: Record<string, { endpoint: string; apiKeyHeader: string;
     google: { endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', apiKeyHeader: 'Authorization', defaultModel: 'gemini-3.5-flash' },
 };
 
+export interface EncryptionService {
+    encrypt(value: string): string;
+    decrypt(value: string): string;
+}
+
 @Injectable()
 export class ChatService {
     constructor(
@@ -46,6 +50,8 @@ export class ChatService {
     private conversationId = 'jmcuc';
     private currentProvider = 'openrouter';
     private currentModel = 'openai/gpt-5.4-nano'; // legacy fallback
+    private encryptionService?: EncryptionService;
+    private encryptedApiKey: string | undefined;
 
     private prompts = {
         chatPrompt: `You are role-playing as an operating system. The user will ask you to do stuff as a computer.
@@ -61,6 +67,11 @@ export class ChatService {
             payload %DATAPAYLOAD%. The current form inputs for the window (their current state is): %FORMINPUTS%. Always ground your answers in real data from the database. If a table doesn't exist you may need to create it.`
     }
 
+
+    async setEncryptionService(encryptionService: EncryptionService) {
+        this.encryptionService = encryptionService;
+    }
+
     async handleConnection(client: Client) {
         console.log('client connected');
 
@@ -74,6 +85,7 @@ export class ChatService {
             client.send(JSON.stringify({ event: 'showConfig', data: {} }));
         } else {
             this.currentProvider = existingConfig.provider;
+            this.encryptedApiKey = existingConfig.encryptedApiKey;
             this.currentModel = existingConfig.model || PROVIDER_CONFIGS[existingConfig.provider]?.defaultModel || 'openai/gpt-5.4-nano';
             this.initializeState(client);
         }
@@ -129,19 +141,24 @@ export class ChatService {
     }
 
     async handleConfig(client: Client, data: any) {
-        if (data.apiKey) {
-            await keytar.setPassword('openall', data.provider, data.apiKey);
-        }
         this.currentProvider = data.provider;
         this.currentModel = data.model || PROVIDER_CONFIGS[data.provider]?.defaultModel;
+        const encryptedApiKey = data.apiKey ? this.encryptionService?.encrypt(data.apiKey) : undefined;
+
+        if (encryptedApiKey) {
+            this.encryptedApiKey = encryptedApiKey;
+        }
 
         const existingConfig = await this.chatConfigRepo.findOne({ where: { id: 0, }, });
         if (existingConfig) {
             existingConfig.provider = data.provider;
             existingConfig.model = data.model;
+            if (encryptedApiKey) {
+                existingConfig.encryptedApiKey = encryptedApiKey;
+            }
             await this.chatConfigRepo.save(existingConfig);
         } else {
-            const newConfig = this.chatConfigRepo.create({ id: 0, provider: data.provider, model: data.model, });
+            const newConfig = this.chatConfigRepo.create({ id: 0, provider: data.provider, model: data.model, encryptedApiKey, });
             await this.chatConfigRepo.save(newConfig);
         }
         if (!this.clients.includes(client)) {
@@ -187,7 +204,7 @@ export class ChatService {
         let hadContentUpdate = false;
 
         for (let i = 0; i < 10; ++i) {
-            const response = await this.runAi(messages);
+            const response = await this.run(messages);
 
             if (response && response.tools) {
                 console.log('tool call', response.tools);
@@ -231,7 +248,7 @@ export class ChatService {
 
         try {
             for (let i = 0; i < 10; ++i) {
-                const response = await this.runAi(messages);
+                const response = await this.run(messages);
 
                 if (response && response.tools) {
                     for (let toolResponse of response.tools) {
@@ -268,7 +285,11 @@ export class ChatService {
     }
 
     async loadApiKey() {
-        return process.env.OPENROUTER_API_KEY || await keytar.getPassword('openall', this.currentProvider) || '';
+        const encryptedApiKey = this.encryptedApiKey;
+
+        return process.env.OPENROUTER_API_KEY
+            || (encryptedApiKey && this.encryptionService?.decrypt(encryptedApiKey))
+            || '';
     }
 
     private normalizeInputSchema(schema?: any): any {
@@ -321,16 +342,20 @@ export class ChatService {
         }));
     }
 
-    async runAi(messages: any[]) {
+    async run(messages: any[]) {
         const apiKey = await this.loadApiKey();
         const activeWindows = await this.getWindowsSummary();
 
+        return this.runAi(messages, activeWindows, apiKey, this.prompts.chatPrompt);
+    }
+
+    async runAi(messages: any[], activeWindows: WindowStateEntity[], apiKey: string, chatPrompt: string) {
         const config = PROVIDER_CONFIGS[this.currentProvider] || PROVIDER_CONFIGS['openrouter'];
 
         const model = this.currentModel || config.defaultModel;
 
         if (this.currentProvider === 'anthropic') {
-            return this.anthropicService.runAiAnthropic(messages, activeWindows, apiKey, model, this.prompts.chatPrompt);
+            return this.anthropicService.runAiAnthropic(messages, activeWindows, apiKey, model, chatPrompt);
         }
 
         const authValue = `Bearer ${apiKey}`;
@@ -344,7 +369,7 @@ export class ChatService {
             body: JSON.stringify({
                 model,
                 messages: [
-                    { role: "system", content: this.prompts.chatPrompt, },
+                    { role: "system", content: chatPrompt, },
                     {
                         role: "system", content: 'currently open windows: ' + JSON.stringify(activeWindows.map(w => ({ id: w.id, title: w.title, })))
                     },

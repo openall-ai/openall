@@ -1,6 +1,6 @@
 import { ConnectedSocket, MessageBody, OnGatewayConnection, OnGatewayDisconnect, SubscribeMessage, WebSocketGateway } from '@nestjs/websockets';
 import { WebSocket } from 'ws';
-import { ChatService } from './chat.service';
+import { ChatService, EncryptionService } from './chat.service';
 
 @WebSocketGateway({ path: '/api/chat' })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -8,6 +8,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     constructor(
         private chatService: ChatService,
     ) {
+    }
+
+    async setEncryptionService(encryptionService: EncryptionService) {
+        this.chatService.setEncryptionService(encryptionService);
     }
 
     async handleConnection(client: WebSocket) {
