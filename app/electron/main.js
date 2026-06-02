@@ -13,6 +13,18 @@ const __dirname = path.dirname(__filename);
 
 // Menu.setApplicationMenu(null);
 
+const encryptionService = {
+    encrypt(value) {
+        return safeStorage.encryptString(value).toString('base64');
+    },
+
+    decrypt(value) {
+        return safeStorage.decryptString(
+            Buffer.from(value, 'base64')
+        );
+    },
+};
+
 let mainWindow = null;
 
 function createWindow() {
