@@ -8,10 +8,20 @@ import { DatabaseService } from "../state/database.service";
 import * as keytar from 'keytar';
 import { openHtmlViewTool, queryDatabase } from "./tools";
 import { AnthropicService } from "./anthropic.service";
+import { McpService } from "../mcp/mcp.service";
 
 export type Client = {
     send: (s: string) => void;
 }
+
+type OpenAIToolDefinition = {
+    type: "function";
+    function: {
+        name: string;
+        description: string;
+        parameters: Record<string, any>;
+    };
+};
 
 const PROVIDER_CONFIGS: Record<string, { endpoint: string; apiKeyHeader: string; defaultModel: string }> = {
     openrouter: { endpoint: 'https://openrouter.ai/api/v1/chat/completions', apiKeyHeader: 'Authorization', defaultModel: 'openai/gpt-5.4-nano' },
@@ -28,6 +38,7 @@ export class ChatService {
         @InjectRepository(WindowStateEntity) private readonly windowStateRepo: Repository<WindowStateEntity>,
         private databaseService: DatabaseService,
         private anthropicService: AnthropicService,
+        private mcpService: McpService,
     ) {
     }
 
@@ -260,6 +271,56 @@ export class ChatService {
         return process.env.OPENROUTER_API_KEY || await keytar.getPassword('openall', this.currentProvider) || '';
     }
 
+    private normalizeInputSchema(schema?: any): any {
+        // Missing schema entirely
+        if (!schema) {
+            return {
+                type: "object",
+                properties: {},
+                additionalProperties: false,
+            };
+        }
+
+        // Schema only contains metadata like $schema
+        const meaningfulKeys = Object.keys(schema).filter(
+            (k) => !["$schema", "$id", "title", "description"].includes(k)
+        );
+
+        if (meaningfulKeys.length === 0) {
+            return {
+                type: "object",
+                properties: {},
+                additionalProperties: false,
+            };
+        }
+
+        // Some MCP servers forget type=object
+        if (!schema.type) {
+            return {
+                type: "object",
+                properties: schema.properties ?? {},
+                required: schema.required ?? [],
+                additionalProperties:
+                    schema.additionalProperties ?? false,
+            };
+        }
+
+        return schema;
+    }
+
+    private async getMcpToolsDefinitions(): Promise<OpenAIToolDefinition[]> {
+        const mcpTools = await this.mcpService.getAllTools();
+
+        return mcpTools.map((tool) => ({
+            type: "function",
+            function: {
+                name: tool.name,
+                description: tool.description ?? "",
+                parameters: this.normalizeInputSchema(tool.inputSchema),
+            },
+        }));
+    }
+
     async runAi(messages: any[]) {
         const apiKey = await this.loadApiKey();
         const activeWindows = await this.getWindowsSummary();
@@ -292,6 +353,7 @@ export class ChatService {
                 tools: [
                     openHtmlViewTool,
                     queryDatabase,
+                    ...(await this.getMcpToolsDefinitions()),
                 ],
                 tool_choice: "auto"
             })
@@ -320,12 +382,26 @@ export class ChatService {
                     const attachmentJSON = toolCall.function.arguments;
                     const attachment = JSON.parse(attachmentJSON);
                     toolResults.push({ attachment: `\`${attachment.content}\``, title: attachment.title, windowId: attachment.windowId, callId: toolCall.id });
-                }
-
-                if (toolCall.function.name === queryDatabase.function.name) {
+                } else if (toolCall.function.name === queryDatabase.function.name) {
                     const parametersJSON = toolCall.function.arguments;
                     const parameters = JSON.parse(parametersJSON);
                     toolResults.push({ query: parameters.query, callId: toolCall.id });
+                } else {
+                    const functionName = toolCall.function.name;
+                    const args = JSON.parse(toolCall.function.arguments);
+
+                    const mcpResult = await this.mcpService.sendMessage('bravesearch', 'tools/call', {
+                        "name": functionName,
+                        "arguments": args
+                    });
+
+                    const newMessage = {
+                        role: "tool",
+                        tool_call_id: toolCall.id,
+                        content: JSON.stringify(mcpResult || 'no output'),
+                    };
+
+                    messages.push(newMessage);
                 }
             }
 
