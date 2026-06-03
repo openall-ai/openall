@@ -2,6 +2,9 @@ import { Injectable, Logger, OnApplicationShutdown, } from "@nestjs/common";
 import { McpInstance } from "./mcp-instance";
 import { McpInstanceStdio } from "./mcp-instance-stdio";
 import { McpInstanceHttp } from "./mcp-instance-http";
+import { Repository } from "typeorm";
+import { McpServerEntity } from "./entities/mcp-server.entity";
+import { InjectRepository } from "@nestjs/typeorm";
 
 interface RunningMcpServer {
     key: string;
@@ -29,9 +32,9 @@ export class McpService implements OnApplicationShutdown {
 
     private readonly servers = new Map<string, RunningMcpServer>();
 
-    private mcpConfig = {};
+    private mcpConfig: McpConfig | undefined;
 
-    constructor() {
+    constructor(@InjectRepository(McpServerEntity) private readonly mcpServerRepo: Repository<McpServerEntity>) {
         this.updateMcpConfiguration({
             'bravesearch': {
                 type: 'stdio',
@@ -43,8 +46,25 @@ export class McpService implements OnApplicationShutdown {
             }
         });
     }
+
+    async getMcpConfig() {
+        if (this.mcpConfig) {
+            return this.mcpConfig;
+        }
+
+        const configs = await this.mcpServerRepo.find();
+        let result = {} as McpConfig;
+        for (let config of configs) {
+            result[config.key] = { type: 'stdio', args: config.args, command: config.command, env: {}, };
+        }
+
+        this.mcpConfig = result;
+
+        return result;
+    }
+
     async updateMcpConfiguration(newConfig: McpConfig) {
-        const currentConfig = this.mcpConfig;
+        const currentConfig = this.getMcpConfig();
 
         const currentKeys = new Set(Object.keys(currentConfig));
         const newKeys = new Set(Object.keys(newConfig));
