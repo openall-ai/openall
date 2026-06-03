@@ -55,7 +55,7 @@ export class McpService implements OnApplicationShutdown {
         const configs = await this.mcpServerRepo.find();
         let result = {} as McpConfig;
         for (let config of configs) {
-            result[config.key] = { type: 'stdio', args: config.args, command: config.command, env: {}, };
+            result[config.key] = { type: 'stdio', args: config.args.split('|'), command: config.command, env: {}, };
         }
 
         this.mcpConfig = result;

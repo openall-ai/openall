@@ -12,5 +12,5 @@ export class McpServerEntity {
     command!: string;
 
     @Column()
-    args!: string[];
+    args!: string;
 }
