@@ -97,7 +97,6 @@ export class McpService implements OnApplicationShutdown {
         // Start added servers
         for (const key of added) {
             await this.addMcpServer(key, newConfig[key]);
-            console.log('added');
             const tools = await this.queryTools(key);
         }
 
