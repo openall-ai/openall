@@ -51,6 +51,8 @@ async function init() {
 
     const chatGateway = await app2.resolve(ChatGateway);
 
+    chatGateway.setEncryptionService(encryptionService);
+
     ipcMain.handle('chat-service:chat', async (_event, payload) => {
         return await chatGateway.handleEvent(payload);
     });

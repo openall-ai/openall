@@ -5,22 +5,13 @@ import { ChatMessageEntity } from "./entities/chat-message.entity";
 import { ChatConfigEntity } from "./entities/chat-config.entity";
 import { Repository } from "typeorm";
 import { DatabaseService } from "../state/database.service";
-import { openHtmlViewTool, queryDatabase } from "./tools";
 import { AnthropicService } from "./anthropic.service";
 import { McpService } from "../mcp/mcp.service";
+import { OpenAiProvider } from "./providers/openAi.provider";
 
 export type Client = {
     send: (s: string) => void;
 }
-
-type OpenAIToolDefinition = {
-    type: "function";
-    function: {
-        name: string;
-        description: string;
-        parameters: Record<string, any>;
-    };
-};
 
 const PROVIDER_CONFIGS: Record<string, { endpoint: string; apiKeyHeader: string; defaultModel: string }> = {
     openrouter: { endpoint: 'https://openrouter.ai/api/v1/chat/completions', apiKeyHeader: 'Authorization', defaultModel: 'openai/gpt-5.4-nano' },
@@ -33,6 +24,17 @@ export interface EncryptionService {
     encrypt(value: string): string;
     decrypt(value: string): string;
 }
+
+const passthroughEncryptionService = {
+    encrypt(value) {
+        return value;
+    },
+
+    decrypt(value) {
+        return value;
+    },
+};
+
 
 @Injectable()
 export class ChatService {
@@ -50,7 +52,7 @@ export class ChatService {
     private conversationId = 'jmcuc';
     private currentProvider = 'openrouter';
     private currentModel = 'openai/gpt-5.4-nano'; // legacy fallback
-    private encryptionService?: EncryptionService;
+    private encryptionService: EncryptionService = passthroughEncryptionService;
     private encryptedApiKey: string | undefined;
 
     private prompts = {
@@ -143,7 +145,7 @@ export class ChatService {
     async handleConfig(client: Client, data: any) {
         this.currentProvider = data.provider;
         this.currentModel = data.model || PROVIDER_CONFIGS[data.provider]?.defaultModel;
-        const encryptedApiKey = data.apiKey ? this.encryptionService?.encrypt(data.apiKey) : undefined;
+        const encryptedApiKey = data.apiKey ? this.encryptionService!.encrypt(data.apiKey) : undefined;
 
         if (encryptedApiKey) {
             this.encryptedApiKey = encryptedApiKey;
@@ -292,145 +294,18 @@ export class ChatService {
             || '';
     }
 
-    private normalizeInputSchema(schema?: any): any {
-        // Missing schema entirely
-        if (!schema) {
-            return {
-                type: "object",
-                properties: {},
-                additionalProperties: false,
-            };
-        }
-
-        // Schema only contains metadata like $schema
-        const meaningfulKeys = Object.keys(schema).filter(
-            (k) => !["$schema", "$id", "title", "description"].includes(k)
-        );
-
-        if (meaningfulKeys.length === 0) {
-            return {
-                type: "object",
-                properties: {},
-                additionalProperties: false,
-            };
-        }
-
-        // Some MCP servers forget type=object
-        if (!schema.type) {
-            return {
-                type: "object",
-                properties: schema.properties ?? {},
-                required: schema.required ?? [],
-                additionalProperties:
-                    schema.additionalProperties ?? false,
-            };
-        }
-
-        return schema;
-    }
-
-    private async getMcpToolsDefinitions(): Promise<OpenAIToolDefinition[]> {
-        const mcpTools = await this.mcpService.getAllTools();
-
-        return mcpTools.map((tool) => ({
-            type: "function",
-            function: {
-                name: tool.name,
-                description: tool.description ?? "",
-                parameters: this.normalizeInputSchema(tool.inputSchema),
-            },
-        }));
-    }
-
     async run(messages: any[]) {
         const apiKey = await this.loadApiKey();
         const activeWindows = await this.getWindowsSummary();
 
-        return this.runAi(messages, activeWindows, apiKey, this.prompts.chatPrompt);
-    }
-
-    async runAi(messages: any[], activeWindows: WindowStateEntity[], apiKey: string, chatPrompt: string) {
         const config = PROVIDER_CONFIGS[this.currentProvider] || PROVIDER_CONFIGS['openrouter'];
-
         const model = this.currentModel || config.defaultModel;
 
         if (this.currentProvider === 'anthropic') {
-            return this.anthropicService.runAiAnthropic(messages, activeWindows, apiKey, model, chatPrompt);
-        }
-
-        const authValue = `Bearer ${apiKey}`;
-
-        const response = await fetch(config.endpoint, {
-            method: "POST",
-            headers: {
-                [config.apiKeyHeader]: authValue,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                model,
-                messages: [
-                    { role: "system", content: chatPrompt, },
-                    {
-                        role: "system", content: 'currently open windows: ' + JSON.stringify(activeWindows.map(w => ({ id: w.id, title: w.title, })))
-                    },
-                    ...messages,
-                ],
-                tools: [
-                    openHtmlViewTool,
-                    queryDatabase,
-                    ...(await this.getMcpToolsDefinitions()),
-                ],
-                tool_choice: "auto"
-            })
-        });
-
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error(`Request failed: ${response.status} ${text}`);
-        }
-
-        const data = await response.json();
-        console.log(data)
-        const message = data.choices[0].message;
-        messages.push(message);
-        if (data.choices[0].finish_reason === 'stop') {
-            console.log(message);
-            return { content: message.content, };
-        } else if (data.choices[0].finish_reason === 'tool_calls') {
-            console.log(message.tool_calls);
-
-            const toolResults: any[] = [];
-
-            for (let toolCall of message.tool_calls) {
-
-                if (toolCall.function.name === openHtmlViewTool.function.name) {
-                    const attachmentJSON = toolCall.function.arguments;
-                    const attachment = JSON.parse(attachmentJSON);
-                    toolResults.push({ attachment: `\`${attachment.content}\``, title: attachment.title, windowId: attachment.windowId, callId: toolCall.id });
-                } else if (toolCall.function.name === queryDatabase.function.name) {
-                    const parametersJSON = toolCall.function.arguments;
-                    const parameters = JSON.parse(parametersJSON);
-                    toolResults.push({ query: parameters.query, callId: toolCall.id });
-                } else {
-                    const functionName = toolCall.function.name;
-                    const args = JSON.parse(toolCall.function.arguments);
-
-                    const mcpResult = await this.mcpService.sendMessage('bravesearch', 'tools/call', {
-                        "name": functionName,
-                        "arguments": args
-                    });
-
-                    const newMessage = {
-                        role: "tool",
-                        tool_call_id: toolCall.id,
-                        content: JSON.stringify(mcpResult || 'no output'),
-                    };
-
-                    messages.push(newMessage);
-                }
-            }
-
-            return { tools: toolResults };
+            return this.anthropicService.runAiAnthropic(messages, activeWindows, apiKey, model, this.prompts.chatPrompt);
+        } else {
+            const provider = new OpenAiProvider(this.mcpService, config);
+            return provider.runAi(messages, activeWindows, apiKey, this.currentModel, this.prompts.chatPrompt);
         }
     }
 
