@@ -63,6 +63,19 @@ export default function Navbar() {
                     </div>
                 ))}
             </div>
+
+            <div className="group relative flex items-center">
+                <div onClick={() => { windowStateStore.setShowLauncher(true) }} className={`flex items-center ${expanded ? "justify-start px-3 gap-3" : "justify-center"} py-2 w-full overflow-hidden rounded-xl
+              bg-white/70 border border-white/40 shadow-sm text-sm text-zinc-700 hover:bg-white/80 hover:shadow-md transition-all cursor-pointer`}>
+                    <span className="text-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z" /></svg>
+                    </span>
+
+                    <div className={`whitespace-nowrap transition-all duration-200 ${expanded ? "opacity-100 w-full" : "opacity-0 w-0 overflow-hidden"}`}>
+                        Search
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

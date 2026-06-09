@@ -63,10 +63,30 @@ export class ChatService {
         need to. Go with the flow, especially creating UIs using the tool and if needed the user will correct it to what they want. Only show data from
         the database. If you show sample data, be sure to add it to the db first (including creating tables if needed). If you don't store the sample
         data in the DB it won't persist and the experience will be confusing.
-        When you need the user to provide a file, render a button in your HTML using the tool: <button onclick="requestFileUpload()">Upload file</button>. When the user clicks it, the file content will arrive as a new chat message in the format [File: name]\\n\`\`\`\\n...content...\\n\`\`\`. Read and process that content directly — you have full ability to analyze any file content sent this way. As soon as you receive a file message, immediately use the attach_artifact tool to update the window that contained the upload button: first show a brief "Analyzing [filename]..." state, then replace it with the full analysis result. Never just reply in text — always update the UI window with the output.`,
+        When you need the user to provide a file, render a button in your HTML using the tool: <button onclick="requestFileUpload()">Upload file</button>. 
+        When the user clicks it, the file content will arrive as a new chat message in the format [File: name]\\n\`\`\`\\n...content...\\n\`\`\`. 
+        Read and process that content directly — you have full ability to analyze any file content sent this way. As soon as you receive a file message, 
+        immediately use the attach_artifact tool to update the window that contained the upload button: first show a brief "Analyzing [filename]..." state, 
+        then replace it with the full analysis result. Never just reply in text — always update the UI window with the output.`,
         uiActionPrompt: `The user has performed an action using doAction() with the following args. You'll need to decide what to do. Most likely you'll update the
             currently active window but not necessarily. The active window has ID %ACTIVEWINDOWID% and its current HTML content is %WINDOWCONTENT%. The user performed an action with
-            payload %DATAPAYLOAD%. The current form inputs for the window (their current state is): %FORMINPUTS%. Always ground your answers in real data from the database. If a table doesn't exist you may need to create it.`
+            payload %DATAPAYLOAD%. The current form inputs for the window (their current state is): %FORMINPUTS%. Always ground your answers in real data from the database. If a table doesn't exist you may need to create it.`,
+        launcherPrompt: `The user is running a launcher search (similar to MacOS's spotlight). I will provide you with the text the user has entered. Provide 3-5 results in JSON format for possible apps
+        the user might want to run given their input. These apps do not necessarily need to exist, the system can generate them on-the-fly. Try and reverese engineer the user's intent with their search 
+        phrase and offer options for apps the user might be intending to run. Ideally the options would not be too repetitive. Output JSON only (no leading \` or anything other than a json array, start with the
+        character [) with two properties per item: title - the text for the spotlight entry to show. This is the app name. AND icon - the ID of a Material Icons icon (such as trending_up or whatever fits the app best)
+        to display as the app-icon. Do not output anything else, do not ask questions, do not use icons that don't exist. Only output this JSON as it's going straight into the launcher results.`,
+        launchOptionPrompt: `You are role-playing as an operating system. The user has selected an option to launch from a spotlight-like menu. I'll tell you which option the user selected.
+        You need to show the UI of the app the user selected using the tool. Use the content tool to show HTML do not output it directly. The html you display with the
+        content tool can be interactive to allow the user shortcuts to perform actions on entities listed etc. Don't ask questions unless you really
+        need to. Go with the flow, especially creating UIs using the tool and if needed the user will correct it to what they want. Only show data from
+        the database. If you show sample data, be sure to add it to the db first (including creating tables if needed). If you don't store the sample
+        data in the DB it won't persist and the experience will be confusing.
+        When you need the user to provide a file, render a button in your HTML using the tool: <button onclick="requestFileUpload()">Upload file</button>. 
+        When the user clicks it, the file content will arrive as a new chat message in the format [File: name]\\n\`\`\`\\n...content...\\n\`\`\`. 
+        Read and process that content directly — you have full ability to analyze any file content sent this way. As soon as you receive a file message, 
+        immediately use the attach_artifact tool to update the window that contained the upload button: first show a brief "Analyzing [filename]..." state, 
+        then replace it with the full analysis result. Never just reply in text — always update the UI window with the output.`,
     }
 
 
@@ -115,6 +135,12 @@ export class ChatService {
                 break;
             case 'resetData':
                 await this.handleResetData();
+                break;
+            case 'loadLauncherOptions':
+                await this.handleLoadLauncherOptions(message.data.text, client);
+                break;
+            case 'launchOption':
+                await this.handleLaunchOption(message.data);
                 break;
             default:
                 console.log('unknown message ', message.event, message.data);
@@ -390,5 +416,66 @@ export class ChatService {
         history = history.reverse();
 
         return history;
+    }
+
+    async handleLoadLauncherOptions(text: string, client: Client) {
+        const messages = [{ role: 'user', content: 'The user has entered the following text in the spotlight search box: ' + text }];
+
+        const apiKey = await this.loadApiKey();
+        const activeWindows = await this.getWindowsSummary();
+
+        const config = PROVIDER_CONFIGS[this.currentProvider] || PROVIDER_CONFIGS['openrouter'];
+        const model = this.currentModel || config.defaultModel;
+
+        let result;
+
+        if (this.currentProvider === 'anthropic') {
+            result = await this.anthropicService.runAiAnthropic(messages, activeWindows, apiKey, model, this.prompts.launcherPrompt);
+        } else {
+            const provider = new OpenAiProvider(this.mcpService, config);
+            result = await provider.runAi(messages, activeWindows, apiKey, this.currentModel, this.prompts.launcherPrompt);
+        }
+
+        client.send(JSON.stringify({ event: 'launcherOptions', data: { text, options: JSON.parse(result.content), } }));
+    }
+
+    async handleLaunchOption(option: { title: string, icon: string }) {
+        const messages = [{ role: 'user', content: 'The user has selected to run the following spotlight search item: ' + JSON.stringify(option), }];
+
+
+        const apiKey = await this.loadApiKey();
+        const activeWindows = await this.getWindowsSummary();
+
+        const config = PROVIDER_CONFIGS[this.currentProvider] || PROVIDER_CONFIGS['openrouter'];
+        const model = this.currentModel || config.defaultModel;
+
+        try {
+            for (let i = 0; i < 10; ++i) {
+                let response;
+
+                if (this.currentProvider === 'anthropic') {
+                    response = await this.anthropicService.runAiAnthropic(messages, activeWindows, apiKey, model, this.prompts.launchOptionPrompt);
+                } else {
+                    const provider = new OpenAiProvider(this.mcpService, config);
+                    response = await provider.runAi(messages, activeWindows, apiKey, this.currentModel, this.prompts.launchOptionPrompt);
+                }
+
+                if (response && response.tools) {
+                    for (let toolResponse of response.tools) {
+                        await this.handleToolCall(toolResponse, messages, this.clients);
+                    }
+                } else {
+                    const responseItem = { content: response!.content, from: 'James' };
+                    const agentMessage = this.chatHistoryRepo.create({ content: responseItem.content, user: undefined, conversationId: this.conversationId, });
+                    await this.chatHistoryRepo.save(agentMessage);
+                    this.clients.forEach(c => c.send(JSON.stringify({ event: 'message', data: responseItem })));
+
+                    break;
+                }
+            }
+        } catch (e: any) {
+            console.error('handleChat error:', e);
+            this.clients.forEach(c => c.send(JSON.stringify({ event: 'message', data: { content: `Error: ${e.message}`, from: 'System' } })));
+        }
     }
 }
