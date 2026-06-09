@@ -76,9 +76,19 @@ let App = observer(() => {
                     </div>
                 </div>
             </DraggableWindow> */}
-            <div className="fixed left-4 top-4 text-4xl text-zinc-300/20 font-black pointer-events-none select-none">
-                openall
-            </div>
+            <div className="fixed left-4 top-4 text-4xl text-zinc-300/20 font-black pointer-events-none select-none flex items-center">
+                <svg id="openall-icon" className="w-12 h-12" width="192" height="192" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OpenAll">
+                    <title>OpenAll</title>
+                    <line stroke="currentColor" style={{ strokeWidth: 13, strokeLinecap: 'round', fill: 'none', strokeDasharray: 77, }} x1="114" y1="32" x2="168" y2="86"></line>
+                    <line stroke="currentColor" style={{ strokeWidth: 13, strokeLinecap: 'round', fill: 'none', strokeDasharray: 77, }} x1="168" y1="114" x2="114" y2="168"></line>
+                    <line stroke="currentColor" style={{ strokeWidth: 13, strokeLinecap: 'round', fill: 'none', strokeDasharray: 77, }} x1="86" y1="168" x2="32" y2="114"></line>
+                    <line stroke="currentColor" style={{ strokeWidth: 13, strokeLinecap: 'round', fill: 'none', strokeDasharray: 77, }} x1="32" y1="86" x2="86" y2="32"></line>
+                    <polygon fill="currentColor" points="100,58 142,100 100,142 58,100"></polygon>
+                </svg>
+                <div className="pb-2 pl-1">
+                    openall
+                </div>
+            </div >
             {windowStateStore.initialized ? <Navbar /> : <></>}
             {windowStateStore.showConfig ? <ConfigBox /> : <></>}
             {windowStateStore.initialized ? <ChatBox /> : <></>}
