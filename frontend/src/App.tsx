@@ -6,6 +6,7 @@ import { ConfigBox } from './config/config-box';
 import { SettingsBox } from './settings/settings-box';
 import { ConnectorsScreen } from './connectors/connectors-screen';
 import { windowStateStore } from './windows/windowState';
+import { Launcher } from './launcher';
 
 const MinimizedList = observer(() => {
     const onRestore = (w: any) => {
@@ -83,6 +84,7 @@ let App = observer(() => {
             {windowStateStore.initialized ? <ChatBox /> : <></>}
             {windowStateStore.showSettings ? <SettingsBox /> : <></>}
             {windowStateStore.showConnectors ? <ConnectorsScreen /> : <></>}
+            {<Launcher />}
             {/* <MessageList /> */}
             <MinimizedList />
 

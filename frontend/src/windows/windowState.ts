@@ -1,5 +1,6 @@
 import { makeAutoObservable } from "mobx";
 import { Connection } from "../connectivity/connection";
+import { launcherState } from "../launcher";
 
 export class WindowStateStore {
     count = 0;
@@ -9,6 +10,7 @@ export class WindowStateStore {
     showConfig = false;
     showSettings = false;
     showConnectors = false;
+    showLauncher = false;
     initialized = false;
     shareState: { active: boolean; imageDataUrl: string; windowTitle: string } | null = null;
 
@@ -57,6 +59,10 @@ export class WindowStateStore {
             this.messages.push({ log: eventData.data.content, });
             return;
         }
+        if (eventData.event === 'launcherOptions') {
+            launcherState.setOptions(eventData.data.text, eventData.data.options);
+        }
+
         if (eventData.event !== 'message') {
             return;
         }
@@ -103,6 +109,10 @@ export class WindowStateStore {
 
     setShowConnectors(show: boolean) {
         this.showConnectors = show;
+    }
+
+    setShowLauncher(show: boolean) {
+        this.showLauncher = show;
     }
 
     doAction(activeWindowId: number, inputs: { [key: string]: string }, ...args: any[]) {

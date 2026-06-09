@@ -52,6 +52,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.chatService.handleMessage(client, { event: 'loadModels', data, });
     }
 
+    @SubscribeMessage('loadLauncherOptions')
+    async handleLoadLauncherOptions(@MessageBody() data: { text: string }, @ConnectedSocket() client: WebSocket) {
+        this.chatService.handleMessage(client, { event: 'loadLauncherOptions', data, });
+    }
+
+    @SubscribeMessage('launchOption')
+    async handleLaunchOption(@MessageBody() data: { text: string }, @ConnectedSocket() client: WebSocket) {
+        this.chatService.handleMessage(client, { event: 'launchOption', data, });
+    }
+
     async handleMessage(msgType: string, data: any, client: WebSocket) {
         this.chatService.handleMessage(client, { event: msgType, data, });
     }
