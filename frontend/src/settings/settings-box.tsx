@@ -1,25 +1,25 @@
 import { observer } from "mobx-react-lite";
 import DraggableWindow from "../draggable-window";
-import { counterStore } from "../chat-box";
+import { windowStateStore } from "../windows/windowState";
 
 export const SettingsContent = observer(() => {
 
-    const chatPrompt = counterStore.prompts.chatPrompt;
-    const uiActionPrompt = counterStore.prompts.uiActionPrompt;
+    const chatPrompt = windowStateStore.prompts.chatPrompt;
+    const uiActionPrompt = windowStateStore.prompts.uiActionPrompt;
 
     const resetData = () => {
         let confirmed = confirm('Delete all app data? This cannot be undone.');
         if (confirmed) {
-            counterStore.sendMessage('resetData', {});
+            windowStateStore.sendMessage('resetData', {});
         }
     };
 
     return <>
         <div className="flex-1">
-            {/* <button onClick={() => counterStore.showConfigWindow()}
+            <button onClick={() => { windowStateStore.setShowSettings(false); windowStateStore.showConfigWindow(); }}
                 className="mb-2 px-6 py-2 rounded-xl bg-gray-800/80 hover:bg-gray-800 text-white font-medium shadow-md transition">
                 Configure LLM Provider
-            </button> */}
+            </button>
 
             <div className="font-bold">Chat Prompt</div>
             <div className="rounded-xl bg-white/80 border-gray-400 border p-2 my-2" contentEditable="true">{chatPrompt}</div>
@@ -35,7 +35,7 @@ export const SettingsContent = observer(() => {
         </div>
 
         <div className="pt-2">
-            <button onClick={() => counterStore.setShowSettings(false)}
+            <button onClick={() => windowStateStore.setShowSettings(false)}
                 className="w-full py-2 rounded-xl bg-gray-900/80 hover:bg-gray-900 text-white font-medium shadow-md transition">
                 Close
             </button>

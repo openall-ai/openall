@@ -11,10 +11,15 @@ export class ConnectionStatus {
 
     connected = false;
     connecting = true;
+    connection!: Connection;
 
     setConnected(connected: boolean) {
         this.connected = connected;
         this.connecting = false;
+    }
+
+    setConnection(connection: Connection) {
+        this.connection = connection;
     }
 }
 
@@ -68,6 +73,7 @@ export class Connection {
             setInterval(this.periodicPing.bind(this), 30000);
         }
         connectionStatus.setConnected(true);
+        connectionStatus.setConnection(this);
     }
 
     async startReconnect() {
@@ -98,7 +104,7 @@ export class Connection {
         }
     }
 
-    async saveConfig(config: { provider: string, apiKey: string, }) {
+    async saveConfig(config: { provider: string, apiKey: string, model: string }) {
         console.log('saveConfig');
         const api = (window as any).api;
         if (api) {

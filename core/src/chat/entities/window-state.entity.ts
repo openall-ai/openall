@@ -1,25 +1,25 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, DeleteDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, DeleteDateColumn } from 'typeorm';
 
 @Entity()
 export class WindowStateEntity {
     @PrimaryGeneratedColumn()
-    id: number;
+    id!: number;
 
     @Column()
-    conversationId: string;
+    conversationId!: string;
 
     @Column({ nullable: true, })
-    user: string;
+    user?: string;
 
     @Column()
-    title: string;
+    title!: string;
 
     @Column('text')
-    content: string;
+    content!: string;
 
     @DeleteDateColumn()
-    closedAt: Date;
+    closedAt!: Date;
 
     @CreateDateColumn()
-    createdAt: Date;
+    createdAt!: Date;
 }

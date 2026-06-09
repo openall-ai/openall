@@ -9,6 +9,9 @@ contextBridge.exposeInMainWorld("api", {
     doAction: (payload) => ipcRenderer.invoke('chat-service:doAction', payload),
 
     sendMessage: (msgType, data) => ipcRenderer.invoke('chat-service:sendMessage', { msgType, data }),
+    openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+    clipboardWriteImage: (dataUrl) => ipcRenderer.invoke('clipboard:writeImage', dataUrl),
+    pickFile: () => ipcRenderer.invoke('file:pick'),
 
     onMessage: (callback) => {
         ipcRenderer.on('ws:event', (_event, data) => {

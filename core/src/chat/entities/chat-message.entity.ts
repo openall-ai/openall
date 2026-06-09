@@ -3,17 +3,17 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne } f
 @Entity()
 export class ChatMessageEntity {
     @PrimaryGeneratedColumn()
-    id: number;
+    id!: number;
 
     @Column()
-    conversationId: string;
+    conversationId!: string;
 
     @Column({ nullable: true, })
-    user: string;
+    user?: string;
 
     @Column('text')
-    content: string;
+    content!: string;
 
     @CreateDateColumn()
-    createdAt: Date;
+    createdAt!: Date;
 }

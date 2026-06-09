@@ -3,11 +3,17 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeor
 @Entity()
 export class ChatConfigEntity {
     @PrimaryGeneratedColumn()
-    id: number;
+    id!: number;
 
     @Column()
-    provider: string;
+    provider!: string;
+
+    @Column({ nullable: true })
+    model!: string;
+
+    @Column({ nullable: true })
+    encryptedApiKey!: string;
 
     @CreateDateColumn()
-    createdAt: Date;
+    createdAt!: Date;
 }

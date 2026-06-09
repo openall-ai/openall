@@ -5,55 +5,36 @@ import { ChatMessageEntity } from "./entities/chat-message.entity";
 import { ChatConfigEntity } from "./entities/chat-config.entity";
 import { Repository } from "typeorm";
 import { DatabaseService } from "../state/database.service";
-import * as keytar from 'keytar';
+import { AnthropicService } from "./anthropic.service";
+import { McpService } from "../mcp/mcp.service";
+import { OpenAiProvider } from "./providers/openAi.provider";
 
 export type Client = {
     send: (s: string) => void;
 }
 
-const openHtmlViewTool = {
-    type: "function",
-    function: {
-        name: "attach_artifact",
-        description: "Attach a structured view using HTML content.",
-        parameters: {
-            type: "object",
-            properties: {
-                title: {
-                    type: "string",
-                    description: "The title for the window being shown. This should be short text, 2-4 words. I.e. 'CRM Contacts' or 'Edit Jim Monroe', etc."
-                },
-                windowId: {
-                    type: "number",
-                    description: "The window ID to display the content from the existing open windows, or 0 to create a new window.",
-                },
-                content: {
-                    type: "string",
-                    description: "The HTML content for the view to be shown. Should be a <div> tag. Use tailwindcss for styling. The background is already set to gray-100 and padding is applied in the parent. You don't need to set this for the content. Do not wrap in `. Call global js function doAction() with parameters describing what should be done to perform actions in handlers (buttons, etc). Do not add <script> tags just call doAction in a click handler etc. Do not enter dynamic content in the doAction params they are fetched for you just describe the action taken."
-                },
-            },
-            required: ["content"]
-        }
-    }
+const PROVIDER_CONFIGS: Record<string, { endpoint: string; apiKeyHeader: string; defaultModel: string }> = {
+    openrouter: { endpoint: 'https://openrouter.ai/api/v1/chat/completions', apiKeyHeader: 'Authorization', defaultModel: 'openai/gpt-5.4-nano' },
+    openai: { endpoint: 'https://api.openai.com/v1/chat/completions', apiKeyHeader: 'Authorization', defaultModel: 'gpt-5.4-mini' },
+    anthropic: { endpoint: 'https://api.anthropic.com/v1/messages', apiKeyHeader: 'x-api-key', defaultModel: 'claude-opus-4-7' },
+    google: { endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', apiKeyHeader: 'Authorization', defaultModel: 'gemini-3.5-flash' },
 };
 
-const queryDatabase = {
-    type: "function",
-    function: {
-        name: "query_db",
-        description: "Run a query on the sqlite DB.",
-        parameters: {
-            type: "object",
-            properties: {
-                query: {
-                    type: "string",
-                    description: "The sqlite query to run on the db. Could be to list all tables, get their schema, etc. Any SQLite query."
-                },
-            },
-            required: ["query"]
-        }
-    }
+export interface EncryptionService {
+    encrypt(value: string): string;
+    decrypt(value: string): string;
+}
+
+const passthroughEncryptionService = {
+    encrypt(value) {
+        return value;
+    },
+
+    decrypt(value) {
+        return value;
+    },
 };
+
 
 @Injectable()
 export class ChatService {
@@ -62,11 +43,17 @@ export class ChatService {
         @InjectRepository(ChatMessageEntity) private readonly chatHistoryRepo: Repository<ChatMessageEntity>,
         @InjectRepository(WindowStateEntity) private readonly windowStateRepo: Repository<WindowStateEntity>,
         private databaseService: DatabaseService,
+        private anthropicService: AnthropicService,
+        private mcpService: McpService,
     ) {
     }
 
     private clients: Client[] = [];
     private conversationId = 'jmcuc';
+    private currentProvider = 'openrouter';
+    private currentModel = 'openai/gpt-5.4-nano'; // legacy fallback
+    private encryptionService: EncryptionService = passthroughEncryptionService;
+    private encryptedApiKey: string | undefined;
 
     private prompts = {
         chatPrompt: `You are role-playing as an operating system. The user will ask you to do stuff as a computer.
@@ -74,11 +61,37 @@ export class ChatService {
         editable with the content he already provided. Use the content tool to show HTML do not output it directly. The html you display with the
         content tool can be interactive to allow the user shortcuts to perform actions on entities listed etc. Don't ask questions unless you really
         need to. Go with the flow, especially creating UIs using the tool and if needed the user will correct it to what they want. Only show data from
-        the database. If you show sample data, be sure to add it to the db first (including creating tables if needed). If you don't store the sample 
-        data in the DB it won't persist and the experience will be confusing.`,
+        the database. If you show sample data, be sure to add it to the db first (including creating tables if needed). If you don't store the sample
+        data in the DB it won't persist and the experience will be confusing.
+        When you need the user to provide a file, render a button in your HTML using the tool: <button onclick="requestFileUpload()">Upload file</button>. 
+        When the user clicks it, the file content will arrive as a new chat message in the format [File: name]\\n\`\`\`\\n...content...\\n\`\`\`. 
+        Read and process that content directly — you have full ability to analyze any file content sent this way. As soon as you receive a file message, 
+        immediately use the attach_artifact tool to update the window that contained the upload button: first show a brief "Analyzing [filename]..." state, 
+        then replace it with the full analysis result. Never just reply in text — always update the UI window with the output.`,
         uiActionPrompt: `The user has performed an action using doAction() with the following args. You'll need to decide what to do. Most likely you'll update the
             currently active window but not necessarily. The active window has ID %ACTIVEWINDOWID% and its current HTML content is %WINDOWCONTENT%. The user performed an action with
-            payload %DATAPAYLOAD%. The current form inputs for the window (their current state is): %FORMINPUTS%. Always ground your answers in real data from the database. If a table doesn't exist you may need to create it.`
+            payload %DATAPAYLOAD%. The current form inputs for the window (their current state is): %FORMINPUTS%. Always ground your answers in real data from the database. If a table doesn't exist you may need to create it.`,
+        launcherPrompt: `The user is running a launcher search (similar to MacOS's spotlight). I will provide you with the text the user has entered. Provide 3-5 results in JSON format for possible apps
+        the user might want to run given their input. These apps do not necessarily need to exist, the system can generate them on-the-fly. Try and reverese engineer the user's intent with their search 
+        phrase and offer options for apps the user might be intending to run. Ideally the options would not be too repetitive. Output JSON only (no leading \` or anything other than a json array, start with the
+        character [) with two properties per item: title - the text for the spotlight entry to show. This is the app name. AND icon - the ID of a Material Icons icon (such as trending_up or whatever fits the app best)
+        to display as the app-icon. Do not output anything else, do not ask questions, do not use icons that don't exist. Only output this JSON as it's going straight into the launcher results.`,
+        launchOptionPrompt: `You are role-playing as an operating system. The user has selected an option to launch from a spotlight-like menu. I'll tell you which option the user selected.
+        You need to show the UI of the app the user selected using the tool. Use the content tool to show HTML do not output it directly. The html you display with the
+        content tool can be interactive to allow the user shortcuts to perform actions on entities listed etc. Don't ask questions unless you really
+        need to. Go with the flow, especially creating UIs using the tool and if needed the user will correct it to what they want. Only show data from
+        the database. If you show sample data, be sure to add it to the db first (including creating tables if needed). If you don't store the sample
+        data in the DB it won't persist and the experience will be confusing.
+        When you need the user to provide a file, render a button in your HTML using the tool: <button onclick="requestFileUpload()">Upload file</button>. 
+        When the user clicks it, the file content will arrive as a new chat message in the format [File: name]\\n\`\`\`\\n...content...\\n\`\`\`. 
+        Read and process that content directly — you have full ability to analyze any file content sent this way. As soon as you receive a file message, 
+        immediately use the attach_artifact tool to update the window that contained the upload button: first show a brief "Analyzing [filename]..." state, 
+        then replace it with the full analysis result. Never just reply in text — always update the UI window with the output.`,
+    }
+
+
+    async setEncryptionService(encryptionService: EncryptionService) {
+        this.encryptionService = encryptionService;
     }
 
     async handleConnection(client: Client) {
@@ -93,6 +106,9 @@ export class ChatService {
         if (!existingConfig) {
             client.send(JSON.stringify({ event: 'showConfig', data: {} }));
         } else {
+            this.currentProvider = existingConfig.provider;
+            this.encryptedApiKey = existingConfig.encryptedApiKey;
+            this.currentModel = existingConfig.model || PROVIDER_CONFIGS[existingConfig.provider]?.defaultModel || 'openai/gpt-5.4-nano';
             this.initializeState(client);
         }
 
@@ -119,6 +135,12 @@ export class ChatService {
                 break;
             case 'resetData':
                 await this.handleResetData();
+                break;
+            case 'loadLauncherOptions':
+                await this.handleLoadLauncherOptions(message.data.text, client);
+                break;
+            case 'launchOption':
+                await this.handleLaunchOption(message.data);
                 break;
             default:
                 console.log('unknown message ', message.event, message.data);
@@ -147,15 +169,24 @@ export class ChatService {
     }
 
     async handleConfig(client: Client, data: any) {
-        if (data.apiKey) {
-            await keytar.setPassword('openall', data.provider, data.apiKey);
+        this.currentProvider = data.provider;
+        this.currentModel = data.model || PROVIDER_CONFIGS[data.provider]?.defaultModel;
+        const encryptedApiKey = data.apiKey ? this.encryptionService!.encrypt(data.apiKey) : undefined;
+
+        if (encryptedApiKey) {
+            this.encryptedApiKey = encryptedApiKey;
         }
+
         const existingConfig = await this.chatConfigRepo.findOne({ where: { id: 0, }, });
         if (existingConfig) {
             existingConfig.provider = data.provider;
+            existingConfig.model = data.model;
+            if (encryptedApiKey) {
+                existingConfig.encryptedApiKey = encryptedApiKey;
+            }
             await this.chatConfigRepo.save(existingConfig);
         } else {
-            const newConfig = this.chatConfigRepo.create({ id: 0, provider: data.provider, });
+            const newConfig = this.chatConfigRepo.create({ id: 0, provider: data.provider, model: data.model, encryptedApiKey, });
             await this.chatConfigRepo.save(newConfig);
         }
         if (!this.clients.includes(client)) {
@@ -201,7 +232,7 @@ export class ChatService {
         let hadContentUpdate = false;
 
         for (let i = 0; i < 10; ++i) {
-            const response = await this.runAi(messages);
+            const response = await this.run(messages);
 
             if (response && response.tools) {
                 console.log('tool call', response.tools);
@@ -243,22 +274,27 @@ export class ChatService {
 
         let messages = history.map(h => ({ role: h.user ? 'user' : 'assistant', content: h.content, }));
 
-        for (let i = 0; i < 10; ++i) {
-            const response = await this.runAi(messages);
+        try {
+            for (let i = 0; i < 10; ++i) {
+                const response = await this.run(messages);
 
-            if (response && response.tools) {
-                for (let toolResponse of response.tools) {
-                    await this.handleToolCall(toolResponse, messages, this.clients);
+                if (response && response.tools) {
+                    for (let toolResponse of response.tools) {
+                        await this.handleToolCall(toolResponse, messages, this.clients);
+                    }
+                } else {
+                    const responseItem = { content: response!.content, from: 'James' };
+                    history.push(this.chatHistoryRepo.create({ content: responseItem.content, user: undefined, }));
+                    const agentMessage = this.chatHistoryRepo.create({ content: responseItem.content, user: undefined, conversationId: this.conversationId, });
+                    await this.chatHistoryRepo.save(agentMessage);
+                    this.clients.forEach(c => c.send(JSON.stringify({ event: 'message', data: responseItem })));
+
+                    break;
                 }
-            } else {
-                const responseItem = { content: response!.content, from: 'James' };
-                history.push(this.chatHistoryRepo.create({ content: responseItem.content, user: undefined, }));
-                const agentMessage = this.chatHistoryRepo.create({ content: responseItem.content, user: undefined, conversationId: this.conversationId, });
-                await this.chatHistoryRepo.save(agentMessage);
-                this.clients.forEach(c => c.send(JSON.stringify({ event: 'message', data: responseItem })));
-
-                break;
             }
+        } catch (e: any) {
+            console.error('handleChat error:', e);
+            this.clients.forEach(c => c.send(JSON.stringify({ event: 'message', data: { content: `Error: ${e.message}`, from: 'System' } })));
         }
     }
 
@@ -277,73 +313,27 @@ export class ChatService {
     }
 
     async loadApiKey() {
-        return process.env.OPENROUTER_API_KEY || await keytar.getPassword('openall', 'openrouter');
+        const encryptedApiKey = this.encryptedApiKey;
+
+        return process.env.OPENROUTER_API_KEY
+            || (encryptedApiKey && this.encryptionService?.decrypt(encryptedApiKey))
+            || '';
     }
 
-    async runAi(messages: { content: string, role: string, }[]) {
+    async run(messages: any[]) {
+        const apiKey = await this.loadApiKey();
         const activeWindows = await this.getWindowsSummary();
 
-        // console.log(messages, messages.length);
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ` + await this.loadApiKey(),
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                model: "openai/gpt-5.4-nano",
-                messages: [
-                    { role: "system", content: this.prompts.chatPrompt, },
-                    {
-                        role: "system", content: 'currently open windows: ' + JSON.stringify(activeWindows.map(w => ({ id: w.id, title: w.title, })))
-                    },
-                    ...messages,
-                    // { role: "user", content: prompt }
-                ],
-                tools: [
-                    openHtmlViewTool,
-                    queryDatabase,
-                ],
-                tool_choice: "auto"
-            })
-        });
+        const config = PROVIDER_CONFIGS[this.currentProvider] || PROVIDER_CONFIGS['openrouter'];
+        const model = this.currentModel || config.defaultModel;
 
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error(`Request failed: ${response.status} ${text}`);
-        }
-
-        const data = await response.json();
-        console.log(data)
-        const message = data.choices[0].message;
-        messages.push(message);
-        if (data.choices[0].finish_reason === 'stop') {
-            console.log(message);
-            return { content: message.content, };
-        } else if (data.choices[0].finish_reason === 'tool_calls') {
-            console.log(message.tool_calls);
-
-            const toolResults: any[] = [];
-
-            for (let toolCall of message.tool_calls) {
-
-                if (toolCall.function.name === openHtmlViewTool.function.name) {
-                    const attachmentJSON = toolCall.function.arguments;
-                    const attachment = JSON.parse(attachmentJSON);
-                    toolResults.push({ attachment: `\`${attachment.content}\``, title: attachment.title, windowId: attachment.windowId, callId: toolCall.id });
-                }
-
-                if (toolCall.function.name === queryDatabase.function.name) {
-                    const parametersJSON = toolCall.function.arguments;
-                    const parameters = JSON.parse(parametersJSON);
-                    toolResults.push({ query: parameters.query, callId: toolCall.id });
-                }
-            }
-
-            return { tools: toolResults };
+        if (this.currentProvider === 'anthropic') {
+            return this.anthropicService.runAiAnthropic(messages, activeWindows, apiKey, model, this.prompts.chatPrompt);
+        } else {
+            const provider = new OpenAiProvider(this.mcpService, config);
+            return provider.runAi(messages, activeWindows, apiKey, this.currentModel, this.prompts.chatPrompt);
         }
     }
-
 
     async getWindowContent(windowId: number,) {
         const window = await this.windowStateRepo.findOne({ where: { id: windowId, } });
@@ -426,5 +416,66 @@ export class ChatService {
         history = history.reverse();
 
         return history;
+    }
+
+    async handleLoadLauncherOptions(text: string, client: Client) {
+        const messages = [{ role: 'user', content: 'The user has entered the following text in the spotlight search box: ' + text }];
+
+        const apiKey = await this.loadApiKey();
+        const activeWindows = await this.getWindowsSummary();
+
+        const config = PROVIDER_CONFIGS[this.currentProvider] || PROVIDER_CONFIGS['openrouter'];
+        const model = this.currentModel || config.defaultModel;
+
+        let result;
+
+        if (this.currentProvider === 'anthropic') {
+            result = await this.anthropicService.runAiAnthropic(messages, activeWindows, apiKey, model, this.prompts.launcherPrompt);
+        } else {
+            const provider = new OpenAiProvider(this.mcpService, config);
+            result = await provider.runAi(messages, activeWindows, apiKey, this.currentModel, this.prompts.launcherPrompt);
+        }
+
+        client.send(JSON.stringify({ event: 'launcherOptions', data: { text, options: JSON.parse(result.content), } }));
+    }
+
+    async handleLaunchOption(option: { title: string, icon: string }) {
+        const messages = [{ role: 'user', content: 'The user has selected to run the following spotlight search item: ' + JSON.stringify(option), }];
+
+
+        const apiKey = await this.loadApiKey();
+        const activeWindows = await this.getWindowsSummary();
+
+        const config = PROVIDER_CONFIGS[this.currentProvider] || PROVIDER_CONFIGS['openrouter'];
+        const model = this.currentModel || config.defaultModel;
+
+        try {
+            for (let i = 0; i < 10; ++i) {
+                let response;
+
+                if (this.currentProvider === 'anthropic') {
+                    response = await this.anthropicService.runAiAnthropic(messages, activeWindows, apiKey, model, this.prompts.launchOptionPrompt);
+                } else {
+                    const provider = new OpenAiProvider(this.mcpService, config);
+                    response = await provider.runAi(messages, activeWindows, apiKey, this.currentModel, this.prompts.launchOptionPrompt);
+                }
+
+                if (response && response.tools) {
+                    for (let toolResponse of response.tools) {
+                        await this.handleToolCall(toolResponse, messages, this.clients);
+                    }
+                } else {
+                    const responseItem = { content: response!.content, from: 'James' };
+                    const agentMessage = this.chatHistoryRepo.create({ content: responseItem.content, user: undefined, conversationId: this.conversationId, });
+                    await this.chatHistoryRepo.save(agentMessage);
+                    this.clients.forEach(c => c.send(JSON.stringify({ event: 'message', data: responseItem })));
+
+                    break;
+                }
+            }
+        } catch (e: any) {
+            console.error('handleChat error:', e);
+            this.clients.forEach(c => c.send(JSON.stringify({ event: 'message', data: { content: `Error: ${e.message}`, from: 'System' } })));
+        }
     }
 }

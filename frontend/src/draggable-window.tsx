@@ -1,7 +1,8 @@
 import { makeAutoObservable } from "mobx";
 import { observer } from "mobx-react-lite";
 import { useRef, useState } from "react";
-import { counterStore } from "./chat-box";
+import { ShareButton } from "./share/share-button";
+import { windowStateStore } from "./windows/windowState";
 
 export class ActiveWindowStore {
     activeWindow: number | null = null;
@@ -27,6 +28,8 @@ const DraggableWindow = observer(({ children, windowKey, title, data, minimized,
     const [position, setPosition] = useState({ x: window.innerWidth / 2 - width / 2, y: window.innerHeight / 2 - height / 2, });
 
     const [size, setSize] = useState({ width, height });
+
+    const windowFrameRef = useRef<HTMLDivElement>(null);
 
     const resizing = useRef(false);
     const resizeStart = useRef({ x: 0, y: 0, width: 0, height: 0 });
@@ -97,11 +100,11 @@ const DraggableWindow = observer(({ children, windowKey, title, data, minimized,
     const onMinimize = (e: any) => {
         e.preventDefault();
         e.stopPropagation();
-        counterStore.minimize(data);
+        windowStateStore.minimize(data);
     }
 
     const onClose = () => {
-        counterStore.closeWindow(data.id);
+        windowStateStore.closeWindow(data.id);
     }
 
     const isWindowCurrentlyActive = activeWindowStore.activeWindow === windowKey;
@@ -113,7 +116,7 @@ const DraggableWindow = observer(({ children, windowKey, title, data, minimized,
             <div className="fixed group" onPointerDown={windowPointerDown} style={{
                 width: size.width,
                 height: size.height,
-                zIndex: isWindowCurrentlyActive ? 10 : 0,
+                zIndex: modal ? 50 : (isWindowCurrentlyActive ? 10 : 0),
                 transform: `translate(${position.x}px, ${position.y}px)`,
             }}>
                 {attention && (
@@ -121,12 +124,12 @@ const DraggableWindow = observer(({ children, windowKey, title, data, minimized,
                         <div className="w-[110%] h-[110%] rounded-3xl bg-orange-400/60 blur-2xl animate-pulse" />
                     </div>
                 )}
-                <div className="rounded-2xl shadow-2xl bg-white/50 backdrop-blur-xl overflow-hidden w-full h-full flex flex-col " >
+                <div ref={windowFrameRef} className="rounded-2xl shadow-2xl bg-white/50 backdrop-blur-xl overflow-hidden w-full h-full flex flex-col " >
                     {/* Title Bar */}
                     < div onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
                         className="flex items-center justify-between px-4 py-3 bg-white/40 cursor-move select-none"
                         style={{
-                            'backgroundColor': isWindowCurrentlyActive ? 'color-mix(in oklab,  #fff 40%, transparent)' : 'transparent',
+                            'backgroundColor': isWindowCurrentlyActive ? 'rgba(255,255,255,0.4)' : 'transparent',
                         }}>
                         {/* <div className="flex gap-2" >
                             <div className="w-3 h-3 rounded-full bg-red-500"> </div>
@@ -139,11 +142,9 @@ const DraggableWindow = observer(({ children, windowKey, title, data, minimized,
                         <div className="flex items-center gap-1 text-zinc-500">
                             {
                                 !modal ? <>
+                                    <ShareButton title={title} windowFrameRef={windowFrameRef} />
                                     <button onPointerDown={onMinimize} className="w-6 h-6 rounded hover:bg-zinc-300/80 flex items-center justify-center transition">
                                         &minus;
-                                    </button>
-                                    <button className="w-6 h-6 rounded hover:bg-zinc-300/80 flex items-center justify-center transition">
-                                        &#9723;
                                     </button>
                                     <button onPointerDown={onClose} className="w-6 h-6 rounded hover:bg-red-500/80 hover:text-white flex items-center justify-center transition">
                                         &times;
