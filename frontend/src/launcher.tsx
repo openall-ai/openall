@@ -10,7 +10,7 @@ class LauncherState {
     }
 
     searchContent = '';
-    options: { title: string, icon: string }[] = [{ title: 'p1', icon: 'trending_up', }, { title: 'p2', icon: 'trending_up', }];
+    options: { title: string, icon: string }[] = [];
     selectedOption = -1;
 
     setSearchContent(s: string) {
