@@ -72,6 +72,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.chatService.handleMessage(client, { event: 'unpinWindow', data });
     }
 
+    @SubscribeMessage('reopenApp')
+    async handleReopenApp(@MessageBody() data: { windowId: number }, @ConnectedSocket() client: WebSocket) {
+        this.chatService.handleMessage(client, { event: 'reopenApp', data });
+    }
+
     async handleMessage(msgType: string, data: any, client: WebSocket) {
         this.chatService.handleMessage(client, { event: msgType, data, });
     }

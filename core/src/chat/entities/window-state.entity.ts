@@ -23,6 +23,9 @@ export class WindowStateEntity {
     @Column({ default: true })
     isOpen!: boolean;
 
+    @Column({ nullable: true, type: 'text' })
+    pinnedContent!: string;
+
     @DeleteDateColumn()
     closedAt!: Date;
 

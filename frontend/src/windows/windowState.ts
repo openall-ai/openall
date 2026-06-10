@@ -148,7 +148,9 @@ export class WindowStateStore {
             existing.minimized = false;
             return;
         }
-        this.windows.push({ ...app, minimized: false, loading: false, inputs: {} });
+        // Show immediately with saved HTML + loading spinner while LLM refreshes with latest data
+        this.windows.push({ ...app, minimized: false, loading: true, inputs: {} });
+        this.connection.then(c => c.sendMessage('reopenApp', { windowId: app.id }));
     }
 
     setShareState(s: typeof this.shareState) {
