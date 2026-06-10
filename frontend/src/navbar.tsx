@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { observer } from "mobx-react-lite";
 import { windowStateStore } from "./windows/windowState";
 
-export default function Navbar() {
+const Navbar = observer(function Navbar() {
     const [expanded, setExpanded] = useState(false);
 
     const showSettings = () => windowStateStore.setShowSettings(true);
@@ -76,6 +77,51 @@ export default function Navbar() {
                     </div>
                 </div>
             </div>
+
+            {/* Apps & Utilities section */}
+            {(expanded || windowStateStore.pinnedApps.length > 0) && (
+                <div className="flex flex-col gap-1">
+                    {expanded && (
+                        <div className="px-3 pt-1 pb-0.5">
+                            <div className="border-t border-white/30" />
+                            <span className={`block pt-2 text-xs font-semibold uppercase tracking-wider select-none ${windowStateStore.pinnedApps.length === 0 ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                                {expanded ? 'Apps & Utilities' : ''}
+                            </span>
+                        </div>
+                    )}
+                    {windowStateStore.pinnedApps.map(app => (
+                        <div key={app.id} className="group/app relative flex items-center">
+                            <div
+                                onClick={() => windowStateStore.reopenPinnedApp(app)}
+                                className={`flex items-center ${expanded ? "justify-start px-3 gap-2" : "justify-center"} py-2 w-full overflow-hidden rounded-xl
+                                    bg-blue-50/60 border border-blue-200/40 shadow-sm text-sm text-zinc-700 hover:bg-blue-100/70 hover:shadow-md transition-all cursor-pointer`}
+                            >
+                                <span className="text-blue-400 shrink-0">
+                                    <svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor">
+                                        <path d="m640-480 80 80v80H520v240l-40 40-40-40v-240H240v-80l80-80v-280h-40v-80h400v80h-40v280Zm-286 80h252l-46-46v-314H400v314l-46 46Zm126 0Z" />
+                                    </svg>
+                                </span>
+                                <span className={`whitespace-nowrap overflow-hidden text-ellipsis transition-all duration-200 ${expanded ? "opacity-100" : "opacity-0 w-0"}`}>
+                                    {app.title}
+                                </span>
+                            </div>
+
+                            {/* Unpin button — only when expanded */}
+                            {expanded && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); windowStateStore.unpinWindow(app.id); }}
+                                    title="Remove from sidebar"
+                                    className="absolute right-1 w-5 h-5 flex items-center justify-center rounded-md text-zinc-400 hover:bg-red-500/80 hover:text-white opacity-0 group-hover/app:opacity-100 transition text-xs"
+                                >
+                                    &times;
+                                </button>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
-}
+});
+
+export default Navbar;

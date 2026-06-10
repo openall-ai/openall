@@ -133,6 +133,12 @@ export class ChatService {
             case 'close':
                 await this.handleClose(message.data);
                 break;
+            case 'pinWindow':
+                await this.handlePin(message.data.windowId, true);
+                break;
+            case 'unpinWindow':
+                await this.handlePin(message.data.windowId, false);
+                break;
             case 'resetData':
                 await this.handleResetData();
                 break;
@@ -158,12 +164,15 @@ export class ChatService {
         }
 
         let windows = await this.windowStateRepo.find({
-            where: { conversationId: this.conversationId, },
+            where: { conversationId: this.conversationId, isOpen: true },
         });
 
         for (let window of windows) {
-            client.send(JSON.stringify({ event: 'ui', data: { id: window.id, content: window.content, title: window.title, } }));
+            client.send(JSON.stringify({ event: 'ui', data: { id: window.id, content: window.content, title: window.title, pinned: window.pinned } }));
         }
+
+        const pinnedApps = await this.getPinnedApps();
+        client.send(JSON.stringify({ event: 'pinnedApps', data: pinnedApps }));
 
         this.clients.push(client);
     }
@@ -301,11 +310,43 @@ export class ChatService {
     async handleClose(data: number) {
         console.log('close', data);
 
-        const existingWindow = await this.windowStateRepo.findOneBy({ id: data, });
+        const existingWindow = await this.windowStateRepo.findOneBy({ id: data });
         if (existingWindow) {
-            await this.windowStateRepo.remove(existingWindow);
-            this.clients.forEach(c => c.send(JSON.stringify({ event: 'closeWindow', data: { id: data, } })));
+            if (existingWindow.pinned) {
+                // Keep in DB for sidebar; just mark as not open so it won't reopen on reconnect
+                await this.windowStateRepo.update(existingWindow.id, { isOpen: false });
+            } else {
+                await this.windowStateRepo.remove(existingWindow);
+            }
+            this.clients.forEach(c => c.send(JSON.stringify({ event: 'closeWindow', data: { id: data } })));
         }
+    }
+
+    async getPinnedApps() {
+        return this.windowStateRepo.find({
+            where: { pinned: true },
+            select: { id: true, title: true, content: true },
+        });
+    }
+
+    async broadcastPinnedApps() {
+        const apps = await this.getPinnedApps();
+        this.clients.forEach(c => c.send(JSON.stringify({ event: 'pinnedApps', data: apps })));
+    }
+
+    async handlePin(windowId: number, pinned: boolean) {
+        const existingWindow = await this.windowStateRepo.findOneBy({ id: windowId });
+        if (!existingWindow) return;
+
+        if (!pinned && !existingWindow.isOpen) {
+            // Unpinning a window that was already closed: delete it entirely
+            await this.windowStateRepo.delete(windowId);
+        } else {
+            existingWindow.pinned = pinned;
+            await this.windowStateRepo.save(existingWindow);
+        }
+
+        await this.broadcastPinnedApps();
     }
 
     async getPrompts() {
@@ -373,18 +414,24 @@ export class ChatService {
             }
         } else {
             if (typeof toolResponse.windowId === 'number' && toolResponse.windowId > 0) {
-                const existingWindow = await this.windowStateRepo.findOne({ where: { id: Number(toolResponse.windowId), } });
+                const existingWindow = await this.windowStateRepo.findOneBy({ id: Number(toolResponse.windowId) });
 
                 if (!existingWindow) {
                     // ???
                     throw new Error('invalid window Id');
                 }
 
+                // If this window was closed while pinned, mark it open again now that the LLM is updating it
+                if (!existingWindow.isOpen) {
+                    await this.windowStateRepo.update(existingWindow.id, { isOpen: true });
+                    existingWindow.isOpen = true;
+                }
+
                 existingWindow.content = toolResponse.attachment;
                 existingWindow.title = toolResponse.title;
 
                 await this.windowStateRepo.save(existingWindow);
-                clients.forEach(c => c.send(JSON.stringify({ event: 'ui', data: { content: toolResponse.attachment, title: toolResponse.title, id: existingWindow.id, } })));
+                clients.forEach(c => c.send(JSON.stringify({ event: 'ui', data: { content: toolResponse.attachment, title: toolResponse.title, id: existingWindow.id, pinned: existingWindow.pinned } })));
             } else {
                 const newWindow = this.windowStateRepo.create({ content: toolResponse.attachment, title: toolResponse.title, conversationId: this.conversationId, });
                 await this.windowStateRepo.save(newWindow);
@@ -392,7 +439,7 @@ export class ChatService {
                 // const agentMessage = this.chatHistoryRepo.create({ content: toolResponse.attachment, user: undefined, conversationId: this.conversationId, });
                 // await this.chatHistoryRepo.save(agentMessage);
 
-                clients.forEach(c => c.send(JSON.stringify({ event: 'ui', data: { content: toolResponse.attachment, title: toolResponse.title, id: newWindow.id, } })));
+                clients.forEach(c => c.send(JSON.stringify({ event: 'ui', data: { content: toolResponse.attachment, title: toolResponse.title, id: newWindow.id, pinned: false } })));
 
             }
             const newMessage = {
