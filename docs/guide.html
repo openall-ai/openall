@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Getting Started — openall</title>
+  <meta name="description" content="A first-user guide to openall — the platform where the LLM is the application runtime.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #08080b;
+      --surface: #0f0f13;
+      --surface2: #13131a;
+      --text: #ede8de;
+      --text-muted: #52504c;
+      --text-mid: #8f8b83;
+      --accent: #c9a96b;
+      --accent-dim: rgba(201,169,107,0.10);
+      --accent-dim2: rgba(201,169,107,0.05);
+      --border: rgba(237,232,222,0.07);
+      --border-mid: rgba(237,232,222,0.14);
+      --border-accent: rgba(201,169,107,0.35);
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 18px;
+      line-height: 1.65;
+      overflow-x: hidden;
+    }
+
+    /* grain */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* NAV */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      padding: 1.4rem 4rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 100;
+      background: rgba(8,8,11,0.82);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      font-weight: 300;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+      text-decoration: none;
+    }
+    .nav-links { display: flex; gap: 2.4rem; list-style: none; }
+    .nav-links a {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 300;
+      color: var(--text-mid);
+      text-decoration: none;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover, .nav-links a.active { color: var(--text); }
+
+    /* PAGE LAYOUT */
+    .page {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 9rem 2rem 8rem;
+    }
+
+    /* HERO */
+    .hero {
+      margin-bottom: 5rem;
+      padding-bottom: 4rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .hero-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 300;
+      color: var(--accent);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 1.2rem;
+    }
+    .hero h1 {
+      font-size: clamp(2.4rem, 5vw, 3.6rem);
+      font-weight: 300;
+      line-height: 1.15;
+      letter-spacing: -0.01em;
+      margin-bottom: 1.4rem;
+      color: var(--text);
+    }
+    .hero h1 em {
+      font-style: italic;
+      color: var(--accent);
+    }
+    .hero p {
+      font-size: 1.15rem;
+      font-weight: 300;
+      color: var(--text-mid);
+      max-width: 560px;
+      line-height: 1.7;
+    }
+
+    /* SECTION */
+    .section {
+      margin-bottom: 5.5rem;
+    }
+    .step-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      font-weight: 300;
+      color: var(--text-muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 0.6rem;
+    }
+    .section h2 {
+      font-size: 1.9rem;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+      margin-bottom: 0.9rem;
+      color: var(--text);
+    }
+    .section h2 em { font-style: italic; color: var(--accent); }
+    .section p {
+      font-size: 1.05rem;
+      font-weight: 300;
+      color: var(--text-mid);
+      line-height: 1.75;
+      margin-bottom: 0.9rem;
+      max-width: 640px;
+    }
+    .section p:last-of-type { margin-bottom: 0; }
+
+    /* SCREENSHOT */
+    .screenshot-wrap {
+      margin: 2rem 0 1.6rem;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border-mid);
+      background: var(--surface);
+      box-shadow: 0 8px 48px rgba(0,0,0,0.55);
+    }
+    .screenshot-wrap img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .screenshot-caption {
+      padding: 0.65rem 1rem;
+      background: var(--surface2);
+      border-top: 1px solid var(--border);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      font-weight: 300;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+    }
+
+    /* TWO-UP SCREENSHOTS */
+    .screenshot-pair {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 2rem 0 1.6rem;
+    }
+    .screenshot-pair .screenshot-wrap { margin: 0; }
+
+    /* CALLOUT */
+    .callout {
+      margin: 1.8rem 0;
+      padding: 1.2rem 1.5rem;
+      background: var(--accent-dim2);
+      border: 1px solid var(--border-accent);
+      border-radius: 8px;
+    }
+    .callout p {
+      font-size: 0.97rem;
+      color: var(--text-mid);
+      margin: 0;
+    }
+    .callout p strong {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    /* KEY CHIP */
+    kbd {
+      display: inline-block;
+      padding: 0.1em 0.45em;
+      background: var(--surface2);
+      border: 1px solid var(--border-mid);
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 300;
+      color: var(--text-mid);
+      white-space: nowrap;
+    }
+
+    /* DIVIDER */
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 5rem 0;
+    }
+
+    /* WHAT'S NEXT */
+    .next-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+    .next-card {
+      padding: 1.4rem 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      text-decoration: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .next-card:hover {
+      border-color: var(--border-accent);
+      background: var(--accent-dim2);
+    }
+    .next-card .card-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      font-weight: 300;
+      color: var(--accent);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.4rem;
+    }
+    .next-card .card-title {
+      font-size: 1.1rem;
+      font-weight: 400;
+      color: var(--text);
+      margin-bottom: 0.35rem;
+    }
+    .next-card .card-desc {
+      font-size: 0.9rem;
+      font-weight: 300;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    @media (max-width: 600px) {
+      nav { padding: 1.2rem 1.4rem; }
+      .nav-links { display: none; }
+      .screenshot-pair { grid-template-columns: 1fr; }
+      .next-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a class="nav-logo" href="index.html">openall</a>
+    <ul class="nav-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="guide.html" class="active">Guide</a></li>
+      <li><a href="manifesto.html">Manifesto</a></li>
+    </ul>
+  </nav>
+
+  <main class="page">
+
+    <!-- HERO -->
+    <header class="hero">
+      <div class="hero-label">Getting Started</div>
+      <h1>Your first session<br>with <em>openall</em></h1>
+      <p>
+        openall is not a chatbot wrapper. There is no application layer —
+        the LLM is the runtime. Every tool you use, every piece of data it tracks,
+        every screen it draws: all of it comes from a single conversation.
+        This guide shows you how.
+      </p>
+    </header>
+
+    <!-- STEP 0: THE INTERFACE -->
+    <section class="section" id="interface">
+      <div class="step-num">The basics</div>
+      <h2>One screen. <em>Infinite tools.</em></h2>
+      <p>
+        When openall opens you see a minimal desktop — a background, a left-hand
+        sidebar, and a single chat bar at the bottom. That bar is everything.
+        Every app you'll ever use starts with something you type there.
+      </p>
+      <div class="screenshot-wrap">
+        <img src="images/guide/01-main-screen.png" alt="The openall main screen">
+        <div class="screenshot-caption">The full interface on launch. Sidebar left, chat bar bottom.</div>
+      </div>
+      <p>
+        The sidebar holds four buttons: a status indicator, connectors, settings,
+        and the app launcher. You won't need most of these on day one.
+        Start by clicking the chat bar.
+      </p>
+    </section>
+
+    <!-- STEP 1: CONFIGURE -->
+    <section class="section" id="configure">
+      <div class="step-num">Step 1</div>
+      <h2>Connect an <em>AI provider</em></h2>
+      <p>
+        Before anything works you need to tell openall which LLM to use.
+        Click the settings icon in the sidebar (the gear) and choose
+        <strong style="color:var(--text)">Configure LLM Provider</strong>,
+        or look for the Configuration prompt that appears on first launch.
+      </p>
+      <div class="screenshot-wrap">
+        <img src="images/guide/03-config-modal.png" alt="Configuration modal">
+        <div class="screenshot-caption">Provider, API key, and model selection.</div>
+      </div>
+      <p>
+        Pick a provider — OpenRouter is the default and gives you access to
+        dozens of models with a single key. Paste your API key, choose a model,
+        and click Save. You're done with setup.
+      </p>
+      <div class="callout">
+        <p>
+          <strong>OpenRouter</strong> lets you try models from OpenAI, Anthropic,
+          Google, and others through one account.
+          Get a free key at <strong>openrouter.ai</strong>.
+        </p>
+      </div>
+    </section>
+
+    <!-- STEP 2: FIRST CONVERSATION -->
+    <section class="section" id="chat">
+      <div class="step-num">Step 2</div>
+      <h2>Just <em>describe</em> what you need</h2>
+      <p>
+        Click the chat bar, type what you want, and press
+        <kbd>Cmd</kbd> + <kbd>Enter</kbd> (or the arrow button).
+        The LLM reads your request, decides what to build, and replies.
+        A message thread appears above the bar so you can see the conversation.
+      </p>
+      <div class="screenshot-wrap">
+        <img src="images/guide/02-chat-expanded.png" alt="Chat conversation expanded">
+        <div class="screenshot-caption">The conversation panel expands on focus, showing the full exchange.</div>
+      </div>
+      <p>
+        You can have a full back-and-forth here — ask follow-up questions,
+        request changes, or just say "make it nicer." The LLM remembers the
+        last 30 messages of context.
+      </p>
+    </section>
+
+    <!-- STEP 3: WINDOWS -->
+    <section class="section" id="windows">
+      <div class="step-num">Step 3</div>
+      <h2>Apps appear as <em>floating windows</em></h2>
+      <p>
+        When the LLM decides to build a tool — a dashboard, a form, a tracker,
+        anything — it generates a complete HTML interface and opens it as a
+        draggable window on your desktop. No code to run. No page to navigate to.
+        It just appears.
+      </p>
+      <div class="screenshot-wrap">
+        <img src="images/guide/11-window-loading-state.png" alt="Window loading">
+        <div class="screenshot-caption">A window appears immediately with a loading indicator while the LLM generates its UI.</div>
+      </div>
+      <div class="screenshot-wrap">
+        <img src="images/guide/07-draggable-window.png" alt="Generated app window">
+        <div class="screenshot-caption">The finished window — draggable, resizable, and fully interactive.</div>
+      </div>
+      <p>
+        Every button, form, and table inside the window is live. Clicking something
+        sends the action back to the LLM, which updates the UI and any underlying
+        data in real time.
+      </p>
+    </section>
+
+    <!-- STEP 4: MANAGING WINDOWS -->
+    <section class="section" id="managing">
+      <div class="step-num">Step 4</div>
+      <h2>Managing your <em>open apps</em></h2>
+      <p>
+        Windows can be dragged, resized, minimized, or closed using the controls
+        in their title bar. Minimizing collapses a window to a small card in the
+        bottom-right corner — it stays accessible without cluttering your view.
+      </p>
+      <div class="screenshot-pair">
+        <div class="screenshot-wrap">
+          <img src="images/guide/08-minimized-window.png" alt="Minimized window">
+          <div class="screenshot-caption">Minimized — click to restore.</div>
+        </div>
+        <div class="screenshot-wrap">
+          <img src="images/guide/10-pinned-app-sidebar.png" alt="Pinned app in sidebar">
+          <div class="screenshot-caption">Pinned — saved to the sidebar.</div>
+        </div>
+      </div>
+      <p>
+        You can also <strong style="color:var(--text)">pin</strong> any window to
+        the sidebar. Pinned apps are remembered between sessions — reopening them
+        shows you the last-saved UI and quietly refreshes the data in the background.
+      </p>
+    </section>
+
+    <!-- STEP 5: LAUNCHER -->
+    <section class="section" id="launcher">
+      <div class="step-num">Step 5</div>
+      <h2>The <em>app launcher</em></h2>
+      <p>
+        Press the magnifying-glass icon in the sidebar (or use the keyboard shortcut)
+        to open the launcher overlay. Type to search your pinned apps or ask the
+        LLM to open something new — it's the fastest way to jump between tools
+        once you've built up a collection.
+      </p>
+      <div class="screenshot-wrap">
+        <img src="images/guide/06-launcher-overlay.png" alt="App launcher overlay">
+        <div class="screenshot-caption">The launcher — search pinned apps or describe a new one.</div>
+      </div>
+    </section>
+
+    <!-- STEP 6: CONNECTORS -->
+    <section class="section" id="connectors">
+      <div class="step-num">Going further</div>
+      <h2>Connect external tools with <em>MCP</em></h2>
+      <p>
+        The connectors screen lets you attach MCP (Model Context Protocol) servers
+        to openall. An MCP server gives the LLM new capabilities — web fetch,
+        browser control, database access, or any tool you configure.
+        Click the chain-link icon in the sidebar to manage them.
+      </p>
+      <div class="screenshot-wrap">
+        <img src="images/guide/05-connectors-screen.png" alt="MCP connectors screen">
+        <div class="screenshot-caption">Add MCP servers visually or paste raw JSON config.</div>
+      </div>
+      <p>
+        Each connector runs as a subprocess. Once connected, its tools are
+        automatically available to the LLM — no extra prompt engineering required.
+      </p>
+      <div class="callout">
+        <p>
+          <strong>Tip:</strong> the <code style="font-family:'JetBrains Mono',monospace;font-size:0.85em;color:var(--text-mid)">@modelcontextprotocol/server-fetch</code>
+          connector is a useful first addition — it lets the LLM read any URL
+          and incorporate live web content into its answers.
+        </p>
+      </div>
+    </section>
+
+    <hr>
+
+    <!-- NEXT STEPS -->
+    <section class="section" id="next">
+      <div class="step-num">What's next</div>
+      <h2>A few things to try <em>right now</em></h2>
+      <p>
+        The best way to learn openall is to ask it for something real.
+        Here are three prompts that show off what it can do:
+      </p>
+
+      <div style="margin-top:1.8rem; display:flex; flex-direction:column; gap:1rem;">
+        <div class="callout">
+          <p>
+            <strong>"Build me a habit tracker. Let me add habits, check them off daily, and see a streak count."</strong>
+          </p>
+        </div>
+        <div class="callout">
+          <p>
+            <strong>"Create a simple CRM — a form to add contacts with name, email, and company, and a table showing everyone I've added."</strong>
+          </p>
+        </div>
+        <div class="callout">
+          <p>
+            <strong>"Make a dashboard showing today's date, a motivational quote, and a live weather summary for Tel Aviv."</strong>
+            <span style="display:block;margin-top:0.4rem;font-size:0.9rem;">(Requires the fetch MCP connector for the weather call.)</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="next-grid" style="margin-top:3rem;">
+        <a class="next-card" href="manifesto.html">
+          <div class="card-label">Philosophy</div>
+          <div class="card-title">The Manifesto</div>
+          <div class="card-desc">Why we built openall, and what it means for software.</div>
+        </a>
+        <a class="next-card" href="index.html">
+          <div class="card-label">Home</div>
+          <div class="card-title">openall.ai</div>
+          <div class="card-desc">Download the desktop app and explore the project.</div>
+        </a>
+      </div>
+    </section>
+
+  </main>
+
+</body>
+</html>

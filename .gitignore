@@ -1,5 +1,12 @@
 **/data/*.sqlite
 
+# Visual test run history (audit log — not committed)
+app/tests/screenshots/runs/
+app/test-results/
+
+# E2E flow screenshots (LLM-generated content — not committed)
+app/tests/screenshots/e2e-flows/
+
 # ---> Node
 # Logs
 logs

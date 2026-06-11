@@ -13,13 +13,17 @@
         "build": "electron-builder",
         "build:win": "electron-builder --win",
         "build:mac": "electron-builder --mac",
-        "build:mac64": "electron-builder --mac --x64"
+        "build:mac64": "electron-builder --mac --x64",
+        "test:visual": "electron tests/visual-capture.mjs",
+        "test:visual:approve": "electron tests/visual-capture.mjs --approve",
+        "test:e2e": "electron tests/e2e-capture.mjs"
     },
     "dependencies": {
         "@openall-ai/core": "^0.2.0",
         "electron-updater": "^6.8.3"
     },
     "devDependencies": {
+        "@playwright/test": "^1.60.0",
         "concurrently": "^9.2.1",
         "cross-env": "^10.1.0",
         "electron": "42.0.1",
