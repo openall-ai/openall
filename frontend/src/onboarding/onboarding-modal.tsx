@@ -6,22 +6,17 @@ const slides = [
     {
         image: 'onboarding/01-main-screen.png',
         title: 'Welcome to openall',
-        body: 'openall is a new kind of desktop. There are no apps to install — every tool you need is built on demand by an AI, right here, as a floating window on your screen.',
-    },
-    {
-        image: 'onboarding/03-config-modal.png',
-        title: 'Connect your AI provider',
-        body: 'Click the gear icon in the sidebar to add your API key. OpenRouter gives you access to dozens of models with a single key and is free to start.',
+        body: 'openall is a new kind of desktop. There are no apps to install, no tabs to manage, no tools to find. Just describe what you need and it appears. A calculator, a live report, a research tool, an answer. Whatever the moment calls for, built instantly, right here. And everything you create stays: your tools, your data, your workflows, always there when you come back.',
     },
     {
         image: 'onboarding/02-chat-expanded.png',
         title: 'Describe what you need',
-        body: 'Just tell openall what you\'re working on — in plain language. The more context you give, the better the result. No commands, no templates, no code.',
+        body: 'Talk to openall the way you\'d talk to a brilliant colleague. Tell it what you\'re working on, what you need, what\'s on your mind. Plain language is all it takes. The more context you give, the more it delivers.',
     },
     {
         image: 'onboarding/07-draggable-window.png',
-        title: 'A full app appears instantly',
-        body: 'The AI builds a live, interactive interface tailored to your exact situation. Every button, table, and workflow is functional — click anything and the AI responds in real time.',
+        title: 'Your problem, solved',
+        body: 'In seconds, your problem becomes a working solution. Not a link to a tool, not a template to fill out. The exact value you looked for, delivered and running, right in front of you.',
     },
     {
         image: 'onboarding/10-pinned-app-sidebar.png',
