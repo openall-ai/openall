@@ -107,6 +107,12 @@ const DraggableWindow = observer(({ children, windowKey, title, data, minimized,
         windowStateStore.closeWindow(data.id);
     }
 
+    const onPin = (e: any) => {
+        e.preventDefault();
+        e.stopPropagation();
+        windowStateStore.pinWindow(data.id);
+    }
+
     const isWindowCurrentlyActive = activeWindowStore.activeWindow === windowKey;
 
     const attention = false;
@@ -143,6 +149,13 @@ const DraggableWindow = observer(({ children, windowKey, title, data, minimized,
                             {
                                 !modal ? <>
                                     <ShareButton title={title} windowFrameRef={windowFrameRef} />
+                                    <button onPointerDown={onPin}
+                                        title={data.pinned ? 'Pinned to sidebar' : 'Pin to sidebar'}
+                                        className={`w-6 h-6 rounded flex items-center justify-center transition ${data.pinned ? 'text-blue-500 bg-blue-100/60 hover:bg-blue-200/80' : 'hover:bg-zinc-300/80'}`}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 -960 960 960" width="14px" fill="currentColor">
+                                            <path d="m640-480 80 80v80H520v240l-40 40-40-40v-240H240v-80l80-80v-280h-40v-80h400v80h-40v280Zm-286 80h252l-46-46v-314H400v314l-46 46Zm126 0Z" />
+                                        </svg>
+                                    </button>
                                     <button onPointerDown={onMinimize} className="w-6 h-6 rounded hover:bg-zinc-300/80 flex items-center justify-center transition">
                                         &minus;
                                     </button>
