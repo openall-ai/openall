@@ -6,7 +6,7 @@ const slides = [
     {
         image: 'onboarding/01-main-screen.png',
         title: 'Welcome to openall',
-        body: 'openall is a new kind of desktop — there are no apps to install. Every tool you need is built on demand by an AI, right here, as a floating window on your screen.',
+        body: 'openall is a new kind of desktop. There are no apps to install — every tool you need is built on demand by an AI, right here, as a floating window on your screen.',
     },
     {
         image: 'onboarding/03-config-modal.png',
@@ -15,23 +15,23 @@ const slides = [
     },
     {
         image: 'onboarding/02-chat-expanded.png',
-        title: 'Just type what you need',
-        body: 'Describe a tool, dashboard, or task in plain language and press Cmd+Enter. The AI reads your request and decides what to build — no commands, no code.',
+        title: 'Describe what you need',
+        body: 'Just tell openall what you\'re working on — in plain language. The more context you give, the better the result. No commands, no templates, no code.',
     },
     {
         image: 'onboarding/07-draggable-window.png',
-        title: 'Your tools appear as windows',
-        body: 'The AI generates a live, interactive interface and opens it as a draggable window. Buttons, forms, and tables all work — click inside and the AI responds in real time.',
+        title: 'A full app appears instantly',
+        body: 'The AI builds a live, interactive interface tailored to your exact situation. Every button, table, and workflow is functional — click anything and the AI responds in real time.',
     },
     {
         image: 'onboarding/10-pinned-app-sidebar.png',
-        title: 'Pin your favourite apps',
-        body: 'Pin any window to the sidebar so it survives across sessions. Reopening a pinned app restores its last UI instantly and quietly refreshes the data in the background.',
+        title: 'Your apps live in the sidebar',
+        body: 'Pin any window to keep it across sessions. Your pinned apps are always one click away — openall restores the UI instantly and refreshes the data in the background.',
     },
     {
         image: 'onboarding/06-launcher-overlay.png',
-        title: 'Launch anything in one click',
-        body: 'Use the magnifier in the sidebar to open the launcher. Search your pinned apps or describe a new one — the fastest way to move between tools once you have a few built up.',
+        title: 'Launch anything, anytime',
+        body: 'Use the search icon in the sidebar to open the launcher. Jump between your pinned apps or describe a new tool — the fastest way to get things done.',
     },
 ];
 
