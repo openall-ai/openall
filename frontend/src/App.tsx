@@ -7,6 +7,7 @@ import { SettingsBox } from './settings/settings-box';
 import { ConnectorsScreen } from './connectors/connectors-screen';
 import { windowStateStore } from './windows/windowState';
 import { Launcher } from './launcher';
+import { OnboardingModal } from './onboarding/onboarding-modal';
 
 const MinimizedList = observer(() => {
     const onRestore = (w: any) => {
@@ -92,6 +93,7 @@ let App = observer(() => {
             {windowStateStore.initialized ? <Navbar /> : <></>}
             {windowStateStore.showConfig ? <ConfigBox /> : <></>}
             {windowStateStore.initialized ? <ChatBox /> : <></>}
+            {windowStateStore.initialized ? <OnboardingModal /> : <></>}
             {windowStateStore.showSettings ? <SettingsBox /> : <></>}
             {windowStateStore.showConnectors ? <ConnectorsScreen /> : <></>}
             {<Launcher />}
