@@ -175,6 +175,8 @@ export class ChatService {
             client.send(JSON.stringify({ event: 'ui', data: { id: window.id, content: window.content, title: window.title, pinned: window.pinned } }));
         }
 
+        this.clients = this.clients.filter(c => c !== client);
+      
         const pinnedApps = await this.getPinnedApps();
         client.send(JSON.stringify({ event: 'pinnedApps', data: pinnedApps }));
 

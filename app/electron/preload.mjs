@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("api", {
     pickFile: () => ipcRenderer.invoke('file:pick'),
 
     onMessage: (callback) => {
+        ipcRenderer.removeAllListeners('ws:event');
         ipcRenderer.on('ws:event', (_event, data) => {
             console.log(data);
             callback({ data: data, });
