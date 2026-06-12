@@ -6,13 +6,8 @@ import { ConfigBox } from './config/config-box';
 import { SettingsBox } from './settings/settings-box';
 import { ConnectorsScreen } from './connectors/connectors-screen';
 import { windowStateStore } from './windows/windowState';
-import { connectionStatus } from './connectivity/connection';
 import { Launcher } from './launcher';
 import { OnboardingModal } from './onboarding/onboarding-modal';
-
-// Expose stores for Playwright visual tests
-(window as any).__store = windowStateStore;
-(window as any).__connectionStatus = connectionStatus;
 
 const MinimizedList = observer(() => {
     const onRestore = (w: any) => {
