@@ -7,6 +7,7 @@ export class WindowStateStore {
     private connection: Promise<Connection>;
     messages: any[] = [];
     windows: any[] = [];
+    pinnedApps: any[] = [];
     showConfig = false;
     showSettings = false;
     showConnectors = false;
@@ -35,9 +36,14 @@ export class WindowStateStore {
                 existingWindow.title = eventData.data.title;
                 existingWindow.loading = false;
                 existingWindow.inputs = {};
+                existingWindow.pinned = eventData.data.pinned;
             } else {
                 this.windows.push(eventData.data);
             }
+            return;
+        }
+        if (eventData.event === 'pinnedApps') {
+            this.pinnedApps = eventData.data;
             return;
         }
         if (eventData.event === 'refresh') {
@@ -127,6 +133,30 @@ export class WindowStateStore {
 
     sendMessage(messageType: string, data: any) {
         this.connection.then(c => c.sendMessage(messageType, data));
+    }
+
+    pinWindow(windowId: number) {
+        const w = this.windows.find(w => w.id === windowId);
+        if (w) w.pinned = true;
+        this.connection.then(c => c.sendMessage('pinWindow', { windowId }));
+    }
+
+    unpinWindow(windowId: number) {
+        this.pinnedApps = this.pinnedApps.filter(a => a.id !== windowId);
+        const w = this.windows.find(w => w.id === windowId);
+        if (w) w.pinned = false;
+        this.connection.then(c => c.sendMessage('unpinWindow', { windowId }));
+    }
+
+    reopenPinnedApp(app: any) {
+        const existing = this.windows.find(w => w.id === app.id);
+        if (existing) {
+            existing.minimized = false;
+            return;
+        }
+        // Show immediately with saved HTML + loading spinner while LLM refreshes with latest data
+        this.windows.push({ ...app, minimized: false, loading: true, inputs: {} });
+        this.connection.then(c => c.sendMessage('reopenApp', { windowId: app.id }));
     }
 
     setShareState(s: typeof this.shareState) {
