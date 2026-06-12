@@ -138,7 +138,7 @@ export const ChatBox = observer(() => {
         <ShareModal />
         <div className="fixed bottom-6 left-1/2 w-full max-w-2xl px-4 group" style={{ transform: 'translateX(-50%)' }}>
 
-            <div tabIndex={0} className="overflow-hidden group-focus-within:h-[400px] h-0 transition-[height,opacity] opacity-0 group-focus-within:opacity-100
+            <div tabIndex={-1} className="overflow-hidden group-focus-within:h-[400px] h-0 transition-[height,opacity] opacity-0 group-focus-within:opacity-100
               rounded-xl bg-white/90 border border-white/40 shadow-sm overflow-y-auto text-sm text-zinc-700 mb-4 outline-none">
                 <MessageList />
             </div>
