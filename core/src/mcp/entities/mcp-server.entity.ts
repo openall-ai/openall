@@ -5,12 +5,6 @@ export class McpServerEntity {
     @PrimaryColumn()
     key!: string;
 
-    @Column()
-    enabled!: boolean;
-
-    @Column()
-    command!: string;
-
-    @Column()
-    args!: string;
+    @Column({ type: 'text' })
+    configJson!: string;
 }

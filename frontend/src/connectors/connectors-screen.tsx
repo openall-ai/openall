@@ -203,21 +203,25 @@ const McpCard = ({ server, onChange, onDelete }: { server: McpServer; onChange: 
 };
 
 const SettingsContent = observer(() => {
-    const [servers, setServers] = useState<McpServer[]>([
-        {
-            name: "fetch",
-            config: {
-                type: "stdio",
-                command: "npx",
-                args: ["-y", "@modelcontextprotocol/server-fetch"],
-                env: {},
-            },
-        },
-    ]);
+    const [servers, setServers] = useState<McpServer[]>([]);
 
     const [mode, setMode] = useState<"visual" | "json">("visual");
     const [jsonText, setJsonText] = useState("");
     const [jsonError, setJsonError] = useState("");
+
+    useEffect(() => {
+        windowStateStore.sendMessage('getMcpConfig', {});
+    }, []);
+
+    useEffect(() => {
+        const config = windowStateStore.mcpConfig;
+        if (!config) return;
+        const loaded: McpServer[] = Object.entries(config).map(([name, cfg]) => ({
+            name,
+            config: cfg as McpConfigEntry,
+        }));
+        setServers(loaded);
+    }, [windowStateStore.mcpConfig]);
 
     useEffect(() => {
         if (mode !== "json") return;
@@ -293,10 +297,8 @@ const SettingsContent = observer(() => {
             };
         }
 
-        console.log("Saving MCP config", config);
-
-        // TODO:
-        // await api.saveMcpConfig(config);
+        windowStateStore.sendMessage('saveMcpConfig', config);
+        windowStateStore.setShowConnectors(false);
     };
 
     return (

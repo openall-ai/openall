@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, ipcMain, shell, clipboard, nativeImage, dialog } from "electron";
+import { app, BrowserWindow, Menu, ipcMain, shell, clipboard, nativeImage, dialog, safeStorage } from "electron";
 import { readFileSync } from "fs";
 import { spawnSync } from "child_process";
 import path from "path";

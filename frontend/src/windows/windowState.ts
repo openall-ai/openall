@@ -14,6 +14,8 @@ export class WindowStateStore {
     initialized = false;
     shareState: { active: boolean; imageDataUrl: string; windowTitle: string } | null = null;
 
+    mcpConfig: any = null;
+
     prompts!: { chatPrompt: string, uiActionPrompt: string, };
 
     constructor() {
@@ -61,6 +63,10 @@ export class WindowStateStore {
         }
         if (eventData.event === 'launcherOptions') {
             launcherState.setOptions(eventData.data.text, eventData.data.options);
+        }
+        if (eventData.event === 'mcpConfig') {
+            this.mcpConfig = eventData.data;
+            return;
         }
 
         if (eventData.event !== 'message') {
