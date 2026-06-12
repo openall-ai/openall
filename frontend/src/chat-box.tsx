@@ -9,13 +9,38 @@ import { windowStateStore } from "./windows/windowState";
 
 
 
+function logLabel(sql: string): string {
+    const verb = sql.trim().split(/\s+/)[0].toUpperCase();
+    const labels: Record<string, string> = {
+        SELECT: 'Querying database',
+        INSERT: 'Inserting data',
+        UPDATE: 'Updating data',
+        DELETE: 'Deleting data',
+        CREATE: 'Setting up database',
+        DROP:   'Modifying database',
+        ALTER:  'Modifying database',
+    };
+    return labels[verb] ?? 'Database operation';
+}
+
 const MessageList = observer(() => {
     return (
         <div className="p-4 text-zinc-800">
             {windowStateStore.messages.map((m, i) => m.log ?
-                // <DraggableWindow x={40} y={40}><div dangerouslySetInnerHTML={{ __html: m.content.trim('`') }}></div></DraggableWindow>
                 <React.Fragment key={'msg' + i}>
-                    <div className="px-2 text-light tracking-tight text-gray-400">{m.log}</div>
+                    <div className="flex items-center gap-1.5 my-0.5 px-2">
+                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-zinc-100/80 border border-zinc-200/60 text-zinc-400 text-xs w-fit select-none">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>
+                            </svg>
+                            {logLabel(m.log)}
+                            <span className="inline-flex items-center gap-0.5 ml-0.5">
+                                <span className="w-1 h-1 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '0ms',   animationDuration: '1s' }} />
+                                <span className="w-1 h-1 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '150ms', animationDuration: '1s' }} />
+                                <span className="w-1 h-1 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '300ms', animationDuration: '1s' }} />
+                            </span>
+                        </div>
+                    </div>
                 </React.Fragment>
                 : <React.Fragment key={'msg' + i}>
                     <div className="px-2 mt-2">{m.from}</div>
