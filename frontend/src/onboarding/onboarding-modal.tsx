@@ -5,27 +5,27 @@ const STORAGE_KEY = 'openall_onboarding_v1';
 
 const slides = [
     {
-        image: 'onboarding/01-main-screen.png',
+        image: 'onboarding/01-main-screen.jpg',
         title: 'Welcome to openall',
         body: 'openall is a new kind of desktop. There are no apps to install, no tabs to manage, no tools to find. Just describe what you need and it appears. A calculator, a live report, a research tool, an answer. Whatever the moment calls for, built instantly, right here. And everything you create stays: your tools, your data, your workflows, always there when you come back.',
     },
     {
-        image: 'onboarding/02-chat-expanded.png',
+        image: 'onboarding/02-chat-expanded.jpg',
         title: 'Describe what you need',
         body: 'Talk to openall the way you\'d talk to a brilliant colleague. Tell it what you\'re working on, what you need, what\'s on your mind. Plain language is all it takes. The more context you give, the more it delivers.',
     },
     {
-        image: 'onboarding/07-draggable-window.png',
+        image: 'onboarding/07-draggable-window.jpg',
         title: 'Your problem, solved',
         body: 'In seconds, your problem becomes a working solution. Not a link to a tool, not a template to fill out. The exact value you looked for, delivered and running, right in front of you.',
     },
     {
-        image: 'onboarding/10-pinned-app-sidebar.png',
+        image: 'onboarding/10-pinned-app-sidebar.jpg',
         title: 'Your apps live in the sidebar',
         body: 'Pin any window to keep it across sessions. Your pinned apps are always one click away — openall restores the UI instantly and refreshes the data in the background.',
     },
     {
-        image: 'onboarding/06-launcher-overlay.png',
+        image: 'onboarding/06-launcher-overlay.jpg',
         title: 'Launch anything, anytime',
         body: 'Use the search icon in the sidebar to open the launcher. Jump between your pinned apps or describe a new tool — the fastest way to get things done.',
     },
