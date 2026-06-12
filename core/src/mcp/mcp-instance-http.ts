@@ -22,6 +22,14 @@ export class McpInstanceHttp implements McpInstance {
         private readonly headers: Record<string, string> = {},
     ) {}
 
+    private get requestHeaders() {
+        return {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+            ...this.headers,
+        };
+    }
+
     public async startServer() {
         if (this.status === "running") {
             return;
@@ -30,25 +38,25 @@ export class McpInstanceHttp implements McpInstance {
         this.status = "starting";
 
         try {
-            //
-            // Optional health check
-            //
-            const response = await fetch(this.endpoint, {
-                method: "OPTIONS",
-                headers: this.headers,
-            }).catch(() => undefined);
+            // MCP initialization handshake
+            const initResult = await this.doPost('initialize', {
+                protocolVersion: '2024-11-05',
+                capabilities: {},
+                clientInfo: { name: 'openall', version: '0.2.0' },
+            });
 
-            if (response && !response.ok) {
-                throw new Error(
-                    `Health check failed (${response.status})`,
-                );
-            }
+            this.logger.log(`MCP HTTP server initialized: ${this.key} (${initResult?.serverInfo?.name ?? this.endpoint})`);
+
+            // Send initialized notification (no id, no response expected)
+            await fetch(this.endpoint, {
+                method: "POST",
+                headers: this.requestHeaders,
+                body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
+            }).catch(() => {});
 
             this.status = "running";
 
-            this.logger.log(
-                `Connected to MCP server: ${this.endpoint}`,
-            );
+            this.logger.log(`Connected to MCP server: ${this.endpoint}`);
         } catch (err) {
             this.status = "error";
 
@@ -64,22 +72,13 @@ export class McpInstanceHttp implements McpInstance {
     public async stopServer() {
         this.status = "stopped";
 
-        this.logger.log(
-            `Disconnected MCP server: ${this.key}`,
-        );
+        this.logger.log(`Disconnected MCP server: ${this.key}`);
 
         return true;
     }
 
-    async sendMessage(method: string, params: unknown) {
-        if (
-            this.status === "notstarted" ||
-            this.status === "stopped"
-        ) {
-            await this.startServer();
-        }
-
-        const message = {
+    private async doPost(method: string, params: unknown): Promise<any> {
+        const body = {
             jsonrpc: "2.0",
             id: randomUUID(),
             method,
@@ -88,44 +87,33 @@ export class McpInstanceHttp implements McpInstance {
 
         const response = await fetch(this.endpoint, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                ...this.headers,
-            },
-            body: JSON.stringify(message),
+            headers: this.requestHeaders,
+            body: JSON.stringify(body),
         });
 
         if (!response.ok) {
-            throw new Error(
-                `HTTP ${response.status}: ${response.statusText}`,
-            );
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
         const result = await response.json();
 
         if (result.error) {
-            throw new Error(
-                result.error.message ??
-                JSON.stringify(result.error),
-            );
+            throw new Error(result.error.message ?? JSON.stringify(result.error));
         }
 
-        //
-        // Detect tools/list response
-        //
-        if (
-            result?.result?.tools &&
-            Array.isArray(result.result.tools)
-        ) {
+        if (result?.result?.tools && Array.isArray(result.result.tools)) {
             this.tools = result.result.tools;
-
-            this.logger.log(
-                `MCP tools loaded: ${this.tools
-                    .map((t: any) => t.name)
-                    .join(", ")}`,
-            );
+            this.logger.log(`MCP tools loaded: ${this.tools.map((t: any) => t.name).join(", ")}`);
         }
 
         return result.result;
+    }
+
+    async sendMessage(method: string, params: unknown) {
+        if (this.status === "notstarted" || this.status === "stopped") {
+            await this.startServer();
+        }
+
+        return await this.doPost(method, params);
     }
 }

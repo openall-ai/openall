@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnApplicationShutdown, } from "@nestjs/common";
+import { Injectable, Logger, OnApplicationShutdown, OnModuleInit } from "@nestjs/common";
 import { McpInstance } from "./mcp-instance";
 import { McpInstanceStdio } from "./mcp-instance-stdio";
 import { McpInstanceHttp } from "./mcp-instance-http";
@@ -27,7 +27,7 @@ export type McpConfigEntry = {
 }
 
 @Injectable()
-export class McpService implements OnApplicationShutdown {
+export class McpService implements OnApplicationShutdown, OnModuleInit {
     private readonly logger = new Logger(McpService.name);
 
     private readonly servers = new Map<string, RunningMcpServer>();
@@ -35,36 +35,46 @@ export class McpService implements OnApplicationShutdown {
     private mcpConfig: McpConfig | undefined;
 
     constructor(@InjectRepository(McpServerEntity) private readonly mcpServerRepo: Repository<McpServerEntity>) {
-        this.updateMcpConfiguration({
-            'bravesearch': {
-                type: 'stdio',
-                command: 'npx',
-                args: ["-y", "@brave/brave-search-mcp-server"],
-                env: {
-                    "BRAVE_API_KEY": "<placeholder>"
-                }
-            }
-        });
     }
 
-    async getMcpConfig() {
+    async onModuleInit() {
+        const config = await this.getMcpConfig();
+        for (const [key, entry] of Object.entries(config)) {
+            try {
+                await this.addMcpServer(key, entry);
+                await this.queryTools(key);
+            } catch (e) {
+                this.logger.warn(`Failed to start server ${key} on init: ${e}`);
+            }
+        }
+    }
+
+    async getMcpConfig(): Promise<McpConfig> {
         if (this.mcpConfig) {
             return this.mcpConfig;
         }
 
-        const configs = await this.mcpServerRepo.find();
-        let result = {} as McpConfig;
-        for (let config of configs) {
-            result[config.key] = { type: 'stdio', args: config.args.split('|'), command: config.command, env: {}, };
+        const rows = await this.mcpServerRepo.find();
+        const result: McpConfig = {};
+        for (const row of rows) {
+            try {
+                result[row.key] = JSON.parse(row.configJson);
+            } catch {
+                this.logger.warn(`Could not parse configJson for key ${row.key}`);
+            }
         }
 
         this.mcpConfig = result;
-
         return result;
     }
 
     async updateMcpConfiguration(newConfig: McpConfig) {
-        const currentConfig = this.getMcpConfig();
+        const currentConfig = await this.getMcpConfig();
+
+        // Persist and update in-memory config first so a server startup
+        // failure cannot prevent the user's changes from being saved.
+        this.mcpConfig = structuredClone(newConfig);
+        await this.persistMcpConfig(newConfig);
 
         const currentKeys = new Set(Object.keys(currentConfig));
         const newKeys = new Set(Object.keys(newConfig));
@@ -83,25 +93,43 @@ export class McpService implements OnApplicationShutdown {
 
         // Stop removed servers
         for (const key of removed) {
-            await this.removeMcpServer(key);
+            try { await this.removeMcpServer(key); } catch (e) { this.logger.warn(`Failed to stop server ${key}: ${e}`); }
         }
 
         // Restart changed servers
         for (const key of changed) {
-            await this.removeMcpServer(key);
-            await this.addMcpServer(key, newConfig[key]);
-
-            const tools = await this.queryTools(key);
+            try {
+                await this.removeMcpServer(key);
+                await this.addMcpServer(key, newConfig[key]);
+                await this.queryTools(key);
+            } catch (e) { this.logger.warn(`Failed to restart server ${key}: ${e}`); }
         }
 
         // Start added servers
         for (const key of added) {
-            await this.addMcpServer(key, newConfig[key]);
-            const tools = await this.queryTools(key);
+            try {
+                await this.addMcpServer(key, newConfig[key]);
+                await this.queryTools(key);
+            } catch (e) { this.logger.warn(`Failed to start server ${key}: ${e}`); }
+        }
+    }
+
+    private async persistMcpConfig(config: McpConfig) {
+        const existingRows = await this.mcpServerRepo.find();
+        const existingKeys = new Set(existingRows.map(r => r.key));
+        const newKeys = new Set(Object.keys(config));
+
+        // Delete removed keys
+        for (const key of existingKeys) {
+            if (!newKeys.has(key)) {
+                await this.mcpServerRepo.delete(key);
+            }
         }
 
-        // Save applied config
-        this.mcpConfig = structuredClone(newConfig);
+        // Upsert remaining/new keys
+        for (const [key, entry] of Object.entries(config)) {
+            await this.mcpServerRepo.save({ key, configJson: JSON.stringify(entry) });
+        }
     }
 
     private configEquals(a: unknown, b: unknown): boolean {
@@ -163,6 +191,15 @@ export class McpService implements OnApplicationShutdown {
 
     getAllTools() {
         return [...this.servers.values()].map(s => s.instance.tools).flat();
+    }
+
+    findServerForTool(toolName: string): string | undefined {
+        for (const [key, server] of this.servers.entries()) {
+            if (server.instance.tools.some((t: any) => t.name === toolName)) {
+                return key;
+            }
+        }
+        return undefined;
     }
 
     async queryTools(key: string) {

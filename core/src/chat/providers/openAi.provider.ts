@@ -119,18 +119,38 @@ export class OpenAiProvider extends AiProvider {
                     const functionName = toolCall.function.name;
                     const args = JSON.parse(toolCall.function.arguments);
 
-                    const mcpResult = await this.mcpService.sendMessage('bravesearch', 'tools/call', {
-                        "name": functionName,
-                        "arguments": args
-                    });
+                    const serverKey = this.mcpService.findServerForTool(functionName);
 
-                    const newMessage = {
+                    let toolContent: string;
+                    if (!serverKey) {
+                        toolContent = `Error: no running MCP server found for tool "${functionName}"`;
+                    } else {
+                        try {
+                            const mcpResult = await this.mcpService.sendMessage(serverKey, 'tools/call', {
+                                "name": functionName,
+                                "arguments": args
+                            });
+
+                            // Use the text content array if present (avoids sending huge
+                            // structuredContent blobs back to the LLM)
+                            if (mcpResult?.content && Array.isArray(mcpResult.content)) {
+                                toolContent = mcpResult.content
+                                    .filter((c: any) => c.type === 'text')
+                                    .map((c: any) => c.text)
+                                    .join('\n') || 'no output';
+                            } else {
+                                toolContent = JSON.stringify(mcpResult || 'no output');
+                            }
+                        } catch (e: any) {
+                            toolContent = `Error calling tool "${functionName}": ${e.message}`;
+                        }
+                    }
+
+                    messages.push({
                         role: "tool",
                         tool_call_id: toolCall.id,
-                        content: JSON.stringify(mcpResult || 'no output'),
-                    };
-
-                    messages.push(newMessage);
+                        content: toolContent,
+                    });
                 }
             }
 

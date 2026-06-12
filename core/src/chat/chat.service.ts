@@ -152,6 +152,12 @@ export class ChatService {
             case 'launchOption':
                 await this.handleLaunchOption(message.data);
                 break;
+            case 'saveMcpConfig':
+                await this.handleSaveMcpConfig(message.data);
+                break;
+            case 'getMcpConfig':
+                await this.handleGetMcpConfig(client);
+                break;
             default:
                 console.log('unknown message ', message.event, message.data);
                 break;
@@ -510,6 +516,15 @@ export class ChatService {
 
             messages.push(newMessage);
         }
+    }
+
+    async handleSaveMcpConfig(data: { mcpServers: any }) {
+        await this.mcpService.updateMcpConfiguration(data.mcpServers);
+    }
+
+    async handleGetMcpConfig(client: Client) {
+        const config = await this.mcpService.getMcpConfig();
+        client.send(JSON.stringify({ event: 'mcpConfig', data: config }));
     }
 
     async getChatHistory() {
