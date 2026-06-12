@@ -165,6 +165,7 @@ export class ChatService {
             client.send(JSON.stringify({ event: 'ui', data: { id: window.id, content: window.content, title: window.title, } }));
         }
 
+        this.clients = this.clients.filter(c => c !== client);
         this.clients.push(client);
     }
 
