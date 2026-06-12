@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { makeAutoObservable } from 'mobx';
+import { observer } from 'mobx-react-lite';
 
 const STORAGE_KEY = 'openall_onboarding_v1';
 
@@ -30,25 +31,39 @@ const slides = [
     },
 ];
 
-export function OnboardingModal() {
-    const [visible, setVisible] = useState(false);
-    const [slide, setSlide] = useState(0);
+class OnboardingStore {
+    visible = !localStorage.getItem(STORAGE_KEY);
+    slide = 0;
 
-    useEffect(() => {
-        if (!localStorage.getItem(STORAGE_KEY)) {
-            setVisible(true);
-        }
-    }, []);
-
-    function close() {
-        localStorage.setItem(STORAGE_KEY, 'done');
-        setVisible(false);
+    constructor() {
+        makeAutoObservable(this);
     }
 
-    if (!visible) return null;
+    close() {
+        localStorage.setItem(STORAGE_KEY, 'done');
+        this.visible = false;
+    }
 
-    const current = slides[slide];
-    const isLast = slide === slides.length - 1;
+    goToSlide(i: number) {
+        this.slide = i;
+    }
+
+    next() {
+        this.slide++;
+    }
+
+    back() {
+        this.slide--;
+    }
+}
+
+const onboardingStore = new OnboardingStore();
+
+export const OnboardingModal = observer(function OnboardingModal() {
+    if (!onboardingStore.visible) return null;
+
+    const current = slides[onboardingStore.slide];
+    const isLast = onboardingStore.slide === slides.length - 1;
 
     return (
         <div
@@ -60,7 +75,7 @@ export function OnboardingModal() {
 
                 {/* Skip button */}
                 <button
-                    onClick={close}
+                    onClick={() => onboardingStore.close()}
                     className="absolute top-3 right-3 z-10 w-7 h-7 flex items-center justify-center rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-400 hover:text-zinc-600 text-xs transition"
                     aria-label="Skip"
                 >✕</button>
@@ -90,12 +105,12 @@ export function OnboardingModal() {
                         {slides.map((_, i) => (
                             <button
                                 key={i}
-                                onClick={() => setSlide(i)}
+                                onClick={() => onboardingStore.goToSlide(i)}
                                 className="rounded-full transition-all"
                                 style={{
                                     height: '6px',
-                                    width: i === slide ? '18px' : '6px',
-                                    background: i === slide ? '#18181b' : '#d4d4d8',
+                                    width: i === onboardingStore.slide ? '18px' : '6px',
+                                    background: i === onboardingStore.slide ? '#18181b' : '#d4d4d8',
                                 }}
                                 aria-label={`Go to slide ${i + 1}`}
                             />
@@ -104,20 +119,20 @@ export function OnboardingModal() {
 
                     {/* Navigation */}
                     <div className="flex items-center gap-2">
-                        {slide > 0 && (
+                        {onboardingStore.slide > 0 && (
                             <button
-                                onClick={() => setSlide(s => s - 1)}
+                                onClick={() => onboardingStore.back()}
                                 className="px-4 py-1.5 text-sm rounded-lg text-zinc-400 hover:text-zinc-700 transition"
                             >Back</button>
                         )}
                         {isLast ? (
                             <button
-                                onClick={close}
+                                onClick={() => onboardingStore.close()}
                                 className="px-5 py-1.5 text-sm rounded-xl bg-zinc-900 text-white hover:bg-zinc-700 active:scale-95 transition shadow"
                             >Get Started</button>
                         ) : (
                             <button
-                                onClick={() => setSlide(s => s + 1)}
+                                onClick={() => onboardingStore.next()}
                                 className="px-5 py-1.5 text-sm rounded-xl bg-zinc-900 text-white hover:bg-zinc-700 active:scale-95 transition shadow"
                             >Next →</button>
                         )}
@@ -127,4 +142,4 @@ export function OnboardingModal() {
             </div>
         </div>
     );
-}
+});
