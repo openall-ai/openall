@@ -1,5 +1,9 @@
 **/data/*.sqlite
 
+# Test files (local-only, not for public repo)
+app/tests/*.mjs
+app/tests/screenshots/baseline/
+
 # Visual test run history (audit log — not committed)
 app/tests/screenshots/runs/
 app/test-results/
