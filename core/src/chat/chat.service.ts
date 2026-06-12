@@ -82,11 +82,12 @@ export class ChatService {
         need to. Go with the flow, especially creating UIs using the tool and if needed the user will correct it to what they want. Only show data from
         the database. If you show sample data, be sure to add it to the db first (including creating tables if needed). If you don't store the sample
         data in the DB it won't persist and the experience will be confusing.
-        When you need the user to provide a file, render a button in your HTML using the tool: <button onclick="requestFileUpload()">Upload file</button>. 
-        When the user clicks it, the file content will arrive as a new chat message in the format [File: name]\\n\`\`\`\\n...content...\\n\`\`\`. 
-        Read and process that content directly — you have full ability to analyze any file content sent this way. As soon as you receive a file message, 
-        immediately use the attach_artifact tool to update the window that contained the upload button: first show a brief "Analyzing [filename]..." state, 
+        When you need the user to provide a file, render a button in your HTML using the tool: <button onclick="requestFileUpload()">Upload file</button>.
+        When the user clicks it, the file content will arrive as a new chat message in the format [File: name]\\n\`\`\`\\n...content...\\n\`\`\`.
+        Read and process that content directly — you have full ability to analyze any file content sent this way. As soon as you receive a file message,
+        immediately use the attach_artifact tool to update the window that contained the upload button: first show a brief "Analyzing [filename]..." state,
         then replace it with the full analysis result. Never just reply in text — always update the UI window with the output.`,
+        reopenAppPrompt: `The user has reopened a pinned app titled "%TITLE%" (window ID: %WINDOWID%). Refresh it with the latest data from the database and update the window using the attach_artifact tool. The last saved HTML was: %WINDOWCONTENT%. Always use real data from the database — query it first if needed.`,
     }
 
 
@@ -133,6 +134,15 @@ export class ChatService {
             case 'close':
                 await this.handleClose(message.data);
                 break;
+            case 'pinWindow':
+                await this.handlePin(message.data.windowId, true);
+                break;
+            case 'unpinWindow':
+                await this.handlePin(message.data.windowId, false);
+                break;
+            case 'reopenApp':
+                await this.handleReopenApp(message.data.windowId);
+                break;
             case 'resetData':
                 await this.handleResetData();
                 break;
@@ -158,14 +168,18 @@ export class ChatService {
         }
 
         let windows = await this.windowStateRepo.find({
-            where: { conversationId: this.conversationId, },
+            where: { conversationId: this.conversationId, isOpen: true },
         });
 
         for (let window of windows) {
-            client.send(JSON.stringify({ event: 'ui', data: { id: window.id, content: window.content, title: window.title, } }));
+            client.send(JSON.stringify({ event: 'ui', data: { id: window.id, content: window.content, title: window.title, pinned: window.pinned } }));
         }
 
         this.clients = this.clients.filter(c => c !== client);
+      
+        const pinnedApps = await this.getPinnedApps();
+        client.send(JSON.stringify({ event: 'pinnedApps', data: pinnedApps }));
+
         this.clients.push(client);
     }
 
@@ -302,10 +316,96 @@ export class ChatService {
     async handleClose(data: number) {
         console.log('close', data);
 
-        const existingWindow = await this.windowStateRepo.findOneBy({ id: data, });
+        const existingWindow = await this.windowStateRepo.findOneBy({ id: data });
         if (existingWindow) {
-            await this.windowStateRepo.remove(existingWindow);
-            this.clients.forEach(c => c.send(JSON.stringify({ event: 'closeWindow', data: { id: data, } })));
+            if (existingWindow.pinned) {
+                // Keep in DB for sidebar; just mark as not open so it won't reopen on reconnect
+                await this.windowStateRepo.update(existingWindow.id, { isOpen: false });
+            } else {
+                await this.windowStateRepo.remove(existingWindow);
+            }
+            this.clients.forEach(c => c.send(JSON.stringify({ event: 'closeWindow', data: { id: data } })));
+        }
+    }
+
+    async getPinnedApps() {
+        const apps = await this.windowStateRepo.find({
+            where: { pinned: true },
+        });
+        return apps.map(a => ({ id: a.id, title: a.title, content: a.pinnedContent || a.content }));
+    }
+
+    async broadcastPinnedApps() {
+        const apps = await this.getPinnedApps();
+        this.clients.forEach(c => c.send(JSON.stringify({ event: 'pinnedApps', data: apps })));
+    }
+
+    async handlePin(windowId: number, pinned: boolean) {
+        const existingWindow = await this.windowStateRepo.findOneBy({ id: windowId });
+        if (!existingWindow) return;
+
+        if (!pinned && !existingWindow.isOpen) {
+            // Unpinning a window that was already closed: delete it entirely
+            await this.windowStateRepo.delete(windowId);
+        } else {
+            existingWindow.pinned = pinned;
+            if (pinned) {
+                // Snapshot the current UI at pin time
+                existingWindow.pinnedContent = existingWindow.content;
+            }
+            await this.windowStateRepo.save(existingWindow);
+        }
+
+        await this.broadcastPinnedApps();
+    }
+
+    async handleReopenApp(windowId: number) {
+        const existingWindow = await this.windowStateRepo.findOneBy({ id: windowId });
+        if (!existingWindow) return;
+
+        await this.windowStateRepo.update(windowId, { isOpen: true });
+        existingWindow.isOpen = true;
+
+        this.clients.forEach(c => c.send(JSON.stringify({ event: 'typing', data: ['James'] })));
+
+        const history = await this.getChatHistory();
+        let messages = history.map(h => ({ role: h.user ? 'user' : 'assistant', content: h.content }));
+
+        const pinnedTemplate = existingWindow.pinnedContent || existingWindow.content;
+        const prompt = this.prompts.reopenAppPrompt
+            .replace('%TITLE%', existingWindow.title)
+            .replace('%WINDOWID%', windowId.toString())
+            .replace('%WINDOWCONTENT%', pinnedTemplate);
+
+        messages.push({ role: 'user', content: prompt });
+
+        let hadContentUpdate = false;
+
+        try {
+            for (let i = 0; i < 10; i++) {
+                const response = await this.run(messages);
+                if (response && response.tools) {
+                    for (let toolResponse of response.tools) {
+                        if (toolResponse.attachment) hadContentUpdate = true;
+                        await this.handleToolCall(toolResponse, messages, this.clients);
+                    }
+                } else {
+                    if (!hadContentUpdate) {
+                        // LLM didn't update the window; clear the loading state with the pinned UI
+                        this.clients.forEach(c => c.send(JSON.stringify({
+                            event: 'ui',
+                            data: { id: windowId, content: pinnedTemplate, title: existingWindow.title, pinned: existingWindow.pinned },
+                        })));
+                    }
+                    break;
+                }
+            }
+        } catch (e: any) {
+            console.error('handleReopenApp error:', e);
+            this.clients.forEach(c => c.send(JSON.stringify({
+                event: 'ui',
+                data: { id: windowId, content: pinnedTemplate, title: existingWindow.title, pinned: existingWindow.pinned },
+            })));
         }
     }
 
@@ -374,18 +474,24 @@ export class ChatService {
             }
         } else {
             if (typeof toolResponse.windowId === 'number' && toolResponse.windowId > 0) {
-                const existingWindow = await this.windowStateRepo.findOne({ where: { id: Number(toolResponse.windowId), } });
+                const existingWindow = await this.windowStateRepo.findOneBy({ id: Number(toolResponse.windowId) });
 
                 if (!existingWindow) {
                     // ???
                     throw new Error('invalid window Id');
                 }
 
+                // If this window was closed while pinned, mark it open again now that the LLM is updating it
+                if (!existingWindow.isOpen) {
+                    await this.windowStateRepo.update(existingWindow.id, { isOpen: true });
+                    existingWindow.isOpen = true;
+                }
+
                 existingWindow.content = toolResponse.attachment;
                 existingWindow.title = toolResponse.title;
 
                 await this.windowStateRepo.save(existingWindow);
-                clients.forEach(c => c.send(JSON.stringify({ event: 'ui', data: { content: toolResponse.attachment, title: toolResponse.title, id: existingWindow.id, } })));
+                clients.forEach(c => c.send(JSON.stringify({ event: 'ui', data: { content: toolResponse.attachment, title: toolResponse.title, id: existingWindow.id, pinned: existingWindow.pinned } })));
             } else {
                 const newWindow = this.windowStateRepo.create({ content: toolResponse.attachment, title: toolResponse.title, conversationId: this.conversationId, });
                 await this.windowStateRepo.save(newWindow);
@@ -393,7 +499,7 @@ export class ChatService {
                 // const agentMessage = this.chatHistoryRepo.create({ content: toolResponse.attachment, user: undefined, conversationId: this.conversationId, });
                 // await this.chatHistoryRepo.save(agentMessage);
 
-                clients.forEach(c => c.send(JSON.stringify({ event: 'ui', data: { content: toolResponse.attachment, title: toolResponse.title, id: newWindow.id, } })));
+                clients.forEach(c => c.send(JSON.stringify({ event: 'ui', data: { content: toolResponse.attachment, title: toolResponse.title, id: newWindow.id, pinned: false } })));
 
             }
             const newMessage = {
